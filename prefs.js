@@ -43,7 +43,8 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     });
     page.add(appManagementGroup);
 
-    // Configured applications list
+    // Configured applications list - store reference for refreshing
+    this._appManagementGroup = appManagementGroup;
     this._createConfiguredAppsList(appManagementGroup, settings, window);
 
     // General Settings Group
@@ -196,6 +197,9 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _createConfiguredAppsList(group, settings, window) {
+    // Store references for refreshing
+    this._settings = settings;
+    this._window = window;
     const configuredApps = this._parseAppConfigs(settings);
     const availableWorkspaces = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -212,9 +216,9 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     });
     addButton.add_css_class('suggested-action');
     addButton.connect('clicked', () => {
-      this._showAddAppDialog(window, settings, () => {
-        // Refresh the list
-        this._refreshAppsList(group, settings, window);
+      this._showAddAppDialog(window, settings, (appId, workspace) => {
+        // Add new app row directly to existing list
+        this._addNewAppRow(appId, workspace);
       });
     });
     headerRow.add_suffix(addButton);
@@ -234,11 +238,15 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     appListBox.add_css_class('boxed-list');
     scrolledWindow.set_child(appListBox);
 
+    // Store reference to app list box for direct updates
+    this._appListBox = appListBox;
+
     // Add configured applications to the list
     Object.entries(configuredApps).forEach(([appId, workspace]) => {
       const app = { app_id: appId, name: appId, workspace: workspace, shortcut: '' };
-      this._addAppRow(appListBox, settings, app, availableWorkspaces, () => {
-        this._refreshAppsList(group, settings, window);
+      this._addAppRow(appListBox, settings, app, availableWorkspaces, (appToRemove) => {
+        // Remove specific app row directly
+        this._removeAppRow(appToRemove);
       });
     });
 
@@ -256,8 +264,11 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     group.add(containerRow);
   }
 
-  _addAppRow(listBox, settings, app, availableWorkspaces, refreshCallback) {
+  _addAppRow(listBox, settings, app, availableWorkspaces, removeCallback) {
     const row = new Gtk.ListBoxRow();
+    // Store app info on the row for easy identification
+    row._appInfo = { appId: app.app_id, workspace: app.workspace };
+
     const mainBox = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
       spacing: 6,
@@ -288,7 +299,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     removeButton.add_css_class('destructive-action');
     removeButton.connect('clicked', () => {
       this._removeAppConfig(settings, app.app_id);
-      refreshCallback();
+      removeCallback(app.app_id);
     });
 
     infoBox.append(appLabel);
@@ -350,30 +361,42 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     listBox.append(row);
   }
 
-  _refreshAppsList(group, settings, window) {
-    log('[TriggerMoveWindows] Refreshing apps list...');
+  _addNewAppRow(appId, workspace) {
+    if (!this._appListBox) {
+      return;
+    }
 
-    try {
-      // Remove all existing children from group
-      let child = group.get_first_child();
-      while (child) {
-        const next = child.get_next_sibling();
-        group.remove(child);
-        child = next;
+    const app = { app_id: appId, name: appId, workspace: workspace, shortcut: '' };
+    const availableWorkspaces = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+    this._addAppRow(this._appListBox, this._settings, app, availableWorkspaces, (appToRemove) => {
+      this._removeAppRow(appToRemove);
+    });
+  }
+
+  _removeAppRow(appId) {
+    if (!this._appListBox) {
+      return;
+    }
+
+    // Find and remove the row with matching app ID
+    let child = this._appListBox.get_first_child();
+    while (child) {
+      const next = child.get_next_sibling();
+      if (child._appInfo && child._appInfo.appId === appId) {
+        this._appListBox.remove(child);
+        break;
       }
-
-      // Recreate the entire configured apps list
-      this._createConfiguredAppsList(group, settings, window);
-      log('[TriggerMoveWindows] Apps list refreshed successfully');
-    } catch (error) {
-      logError(error, '[TriggerMoveWindows] Error refreshing apps list');
+      child = next;
     }
   }
 
-  _showAddAppDialog(parent, settings, refreshCallback) {
+
+
+  _showAddAppDialog(parent, settings, addCallback) {
     log('[TriggerMoveWindows] Opening simplified application dialog...');
     // Use simplified version for now until debugging is complete
-    this._showSimpleAddDialog(parent, settings, refreshCallback);
+    this._showSimpleAddDialog(parent, settings, addCallback);
   }
 
   _showApplicationBrowser(parent, settings, refreshCallback) {
@@ -679,7 +702,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     refreshCallback();
   }
 
-  _showSimpleAddDialog(parent, settings, refreshCallback) {
+  _showSimpleAddDialog(parent, settings, addCallback) {
     log('[TriggerMoveWindows] Creating simple add dialog...');
 
     const dialog = new Adw.MessageDialog({
@@ -780,8 +803,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
             log(`[TriggerMoveWindows] Calling _updateAppConfig with: ${JSON.stringify(appData)}`);
             this._updateAppConfig(settings, appId, workspace);
-            log('[TriggerMoveWindows] App added successfully, calling refresh...');
-            refreshCallback();
+            addCallback(appId, workspace);
           } catch (error) {
             logError(error, '[TriggerMoveWindows] Error adding app');
           }
