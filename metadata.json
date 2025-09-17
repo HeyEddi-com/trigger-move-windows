@@ -1,0 +1,13 @@
+{
+  "uuid": "trigger-move-windows@eddi.local",
+  "name": "Trigger Move Windows",
+  "description": "Automatically organize windows across workspaces with keyboard shortcut",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48"
+  ],
+  "url": "https://github.com/eddimon/trigger-move-windows",
+  "version": 1
+}

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.trigger-move-windows" path="/org/gnome/shell/extensions/trigger-move-windows/">
+
+    <!-- Main trigger shortcut (legacy - for organizing all windows) -->
+    <key name="trigger-shortcut" type="as">
+      <default>['&lt;Super&gt;&lt;Shift&gt;m']</default>
+      <summary>Main keyboard shortcut to trigger extension</summary>
+      <description>The main keyboard shortcut that will trigger the extension functionality</description>
+    </key>
+
+    <!-- Configured applications as JSON array -->
+    <key name="app-configs" type="s">
+      <default>'{}'</default>
+      <summary>Configured applications list</summary>
+      <description>JSON object of configured applications with their settings (app_id, name, workspace, shortcut, icon)</description>
+    </key>
+
+    <!-- Application-specific shortcuts as JSON object -->
+    <key name="app-shortcuts" type="s">
+      <default>'{}'</default>
+      <summary>Application-specific keyboard shortcuts</summary>
+      <description>JSON object mapping application IDs to their keyboard shortcuts</description>
+    </key>
+
+    <!-- Available workspace numbers (1-based) -->
+    <key name="available-workspaces" type="ai">
+      <default>[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]</default>
+      <summary>Available workspace numbers</summary>
+      <description>List of workspace numbers that can be assigned to applications</description>
+    </key>
+
+    <!-- Enable/disable desktop notifications -->
+    <key name="show-notifications" type="b">
+      <default>true</default>
+      <summary>Show desktop notifications</summary>
+      <description>Whether to show desktop notifications when activating applications</description>
+    </key>
+
+    <!-- Enable/disable debug logging -->
+    <key name="debug-logging" type="b">
+      <default>false</default>
+      <summary>Enable debug logging</summary>
+      <description>Whether to enable debug logging to the system journal</description>
+    </key>
+
+    <!-- Application launch behavior -->
+    <key name="launch-if-not-running" type="b">
+      <default>true</default>
+      <summary>Launch application if not running</summary>
+      <description>Whether to launch an application if it's not currently running when activated</description>
+    </key>
+
+    <!-- Move application to configured workspace -->
+    <key name="move-to-workspace" type="b">
+      <default>true</default>
+      <summary>Move application to configured workspace</summary>
+      <description>Whether to move the application to its configured workspace when activated</description>
+    </key>
+
+    <!-- Focus application window -->
+    <key name="focus-on-activate" type="b">
+      <default>true</default>
+      <summary>Focus application window on activation</summary>
+      <description>Whether to focus the application window when activated</description>
+    </key>
+
+    <!-- Switch to application workspace -->
+    <key name="switch-to-workspace" type="b">
+      <default>true</default>
+      <summary>Switch to application workspace</summary>
+      <description>Whether to switch to the application's workspace when activated</description>
+    </key>
+
+    <!-- Handle multiple windows of same application -->
+    <key name="multi-window-behavior" type="s">
+      <choices>
+        <choice value="focus-any"/>
+        <choice value="focus-recent"/>
+        <choice value="cycle-windows"/>
+      </choices>
+      <default>'focus-recent'</default>
+      <summary>Multiple window handling behavior</summary>
+      <description>How to handle applications with multiple windows: focus-any, focus-recent, or cycle-windows</description>
+    </key>
+
+    <!-- Notification timeout in seconds -->
+    <key name="notification-timeout" type="i">
+      <default>3</default>
+      <range min="1" max="10"/>
+      <summary>Notification timeout</summary>
+      <description>How long to show desktop notifications in seconds</description>
+    </key>
+
+    <!-- Shortcut conflict resolution -->
+    <key name="allow-shortcut-conflicts" type="b">
+      <default>false</default>
+      <summary>Allow shortcut conflicts</summary>
+      <description>Whether to allow multiple applications to have the same keyboard shortcut</description>
+    </key>
+
+    <!-- Application discovery cache expiry (hours) -->
+    <key name="app-cache-expiry" type="i">
+      <default>24</default>
+      <range min="1" max="168"/>
+      <summary>Application cache expiry time</summary>
+      <description>How many hours to cache discovered applications before refreshing</description>
+    </key>
+
+  </schema>
+</schemalist>
