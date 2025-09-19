@@ -149,6 +149,25 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     });
     appLabel.add_css_class('heading');
 
+    const buttonBox = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 6,
+    });
+
+    const editButton = new Gtk.Button({
+      icon_name: 'document-edit-symbolic',
+      valign: Gtk.Align.CENTER,
+      tooltip_text: _('Edit Application'),
+    });
+    editButton.connect('clicked', () => {
+      this._showEditAppDialog(listBox.get_root(), settings, app, (newName) => {
+        // Update the display name in the label
+        appLabel.set_label(newName);
+        // Update the stored configuration
+        this._updateAppDisplayName(settings, app.app_id, newName);
+      });
+    });
+
     const removeButton = new Gtk.Button({
       icon_name: 'edit-delete-symbolic',
       valign: Gtk.Align.CENTER,
@@ -160,8 +179,11 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       removeCallback(app.app_id);
     });
 
+    buttonBox.append(editButton);
+    buttonBox.append(removeButton);
+
     infoBox.append(appLabel);
-    infoBox.append(removeButton);
+    infoBox.append(buttonBox);
 
     // Settings row
     const settingsBox = new Gtk.Box({
@@ -794,5 +816,67 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   _updateAppShortcut(settings, appId, shortcut) {
     // For now, just log the shortcut - we'll implement this after basic functionality works
     log(`[TriggerMoveWindows] Shortcut for ${appId}: ${shortcut}`);
+  }
+
+  _updateAppDisplayName(settings, appId, newName) {
+    log(`[TriggerMoveWindows] Updating display name for ${appId} to: ${newName}`);
+    const configs = this._parseAppConfigs(settings);
+    const currentConfig = configs[appId] || { workspace: 1, shortcut: '' };
+    currentConfig.name = newName;
+    this._updateAppConfig(settings, appId, currentConfig);
+  }
+
+  _showEditAppDialog(parent, settings, app, callback) {
+    const dialog = new Adw.MessageDialog({
+      heading: _('Edit Application'),
+      body: _('Modify application display name'),
+      transient_for: parent,
+    });
+
+    const content = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: 12,
+      margin_top: 12,
+      margin_bottom: 12,
+      margin_start: 12,
+      margin_end: 12,
+    });
+
+    const nameEntry = new Gtk.Entry({
+      text: app.name || app.app_id,
+      placeholder_text: _('Display name'),
+      hexpand: true,
+    });
+
+    const infoLabel = new Gtk.Label({
+      label: _(`Application ID: ${app.app_id}`),
+      xalign: 0,
+    });
+    infoLabel.add_css_class('caption');
+
+    content.append(new Gtk.Label({
+      label: _('Display Name:'),
+      xalign: 0,
+    }));
+    content.append(nameEntry);
+    content.append(infoLabel);
+
+    dialog.set_extra_child(content);
+
+    dialog.add_response('cancel', _('Cancel'));
+    dialog.add_response('save', _('Save'));
+    dialog.set_response_appearance('save', Adw.ResponseAppearance.SUGGESTED);
+
+    dialog.connect('response', (dialog, response) => {
+      if (response === 'save') {
+        const newName = nameEntry.get_text().trim();
+        if (newName) {
+          callback(newName);
+        }
+      }
+      dialog.destroy();
+    });
+
+    dialog.show();
   }
 }
