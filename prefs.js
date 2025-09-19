@@ -730,41 +730,80 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   _showShortcutDialog(parent, callback) {
     const dialog = new Adw.MessageDialog({
       heading: _('Set Keyboard Shortcut'),
-      body: _('Press the key combination you want to use, or press Escape to cancel'),
+      body: _('Enter keyboard shortcut (e.g., super+shift+m, ctrl+alt+t)'),
       transient_for: parent,
     });
 
-    const eventController = new Gtk.EventControllerKey();
-    dialog.add_controller(eventController);
-
-    eventController.connect('key-pressed', (controller, keyval, keycode, state) => {
-      if (keyval === Gdk.KEY_Escape) {
-        dialog.destroy();
-        return true;
-      }
-
-      const mask = state & Gtk.accelerator_get_default_mod_mask();
-      if (mask === 0) {
-        return false;
-      }
-
-      const shortcut = Gtk.accelerator_name(keyval, mask);
-      callback(shortcut);
-      dialog.destroy();
-      return true;
+    const content = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: 12,
+      margin_top: 12,
+      margin_bottom: 12,
+      margin_start: 12,
+      margin_end: 12,
     });
+
+    const shortcutEntry = new Gtk.Entry({
+      placeholder_text: _('super+shift+m'),
+      hexpand: true,
+      editable: true,
+      can_focus: true,
+    });
+
+    const exampleLabel = new Gtk.Label({
+      label: _('Examples: super+shift+m, ctrl+alt+t, super+space, alt+f4'),
+      xalign: 0,
+    });
+    exampleLabel.add_css_class('caption');
+
+    const formatLabel = new Gtk.Label({
+      label: _('Format: Use + to separate keys. Modifiers: super, ctrl, alt, shift'),
+      xalign: 0,
+    });
+    formatLabel.add_css_class('caption');
+
+    content.append(new Gtk.Label({
+      label: _('Keyboard Shortcut:'),
+      xalign: 0,
+    }));
+    content.append(shortcutEntry);
+    content.append(exampleLabel);
+    content.append(formatLabel);
+
+    dialog.set_extra_child(content);
 
     dialog.add_response('clear', _('Clear'));
     dialog.add_response('cancel', _('Cancel'));
+    dialog.add_response('save', _('Save'));
+    dialog.set_response_appearance('save', Adw.ResponseAppearance.SUGGESTED);
 
     dialog.connect('response', (dialog, response) => {
       if (response === 'clear') {
         callback('');
+      } else if (response === 'save') {
+        const shortcutText = shortcutEntry.get_text().trim().toLowerCase();
+        if (shortcutText) {
+          // Convert to standard format
+          const formattedShortcut = this._formatShortcutText(shortcutText);
+          callback(formattedShortcut);
+        }
       }
       dialog.destroy();
     });
 
     dialog.show();
+  }
+
+  _formatShortcutText(shortcutText) {
+    if (!shortcutText) return '';
+
+    // Convert user input to standard GTK format
+    return shortcutText
+      .replace(/super/g, '<Super>')
+      .replace(/ctrl/g, '<Control>')
+      .replace(/alt/g, '<Alt>')
+      .replace(/shift/g, '<Shift>')
+      .replace(/\+/g, '');
   }
 
   _getShortcutLabel(shortcuts) {
@@ -835,8 +874,12 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _updateAppShortcut(settings, appId, shortcut) {
-    // For now, just log the shortcut - we'll implement this after basic functionality works
     log(`[TriggerMoveWindows] Shortcut for ${appId}: ${shortcut}`);
+    const configs = this._parseAppConfigs(settings);
+    const currentConfig = configs[appId] || { name: appId, workspace: 1 };
+    currentConfig.shortcut = shortcut;
+    this._updateAppConfig(settings, appId, currentConfig);
+    // Extension automatically refreshes shortcuts via settings monitoring
   }
 
   _updateAppDisplayName(settings, appId, newName) {

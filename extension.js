@@ -1,5 +1,6 @@
 'use strict';
 
+import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -11,6 +12,7 @@ export default class TriggerMoveWindows extends Extension {
   constructor(metadata) {
     super(metadata);
     this._settings = null;
+    this._appShortcuts = new Map(); // Track registered app shortcuts
   }
 
   enable() {
@@ -27,6 +29,16 @@ export default class TriggerMoveWindows extends Extension {
       // Add keybindings
       this._addKeybindings();
 
+      // Add individual app shortcuts
+      this._addAppShortcuts();
+
+      // Monitor settings changes to refresh shortcuts
+      this._settingsChangedId = this._settings.connect('changed::app-configs', () => {
+        log(`[${ME}] App configs changed, refreshing shortcuts...`);
+        this._removeAppShortcuts();
+        this._addAppShortcuts();
+      });
+
       log(`[${ME}] Extension enabled successfully`);
 
     } catch (error) {
@@ -39,9 +51,18 @@ export default class TriggerMoveWindows extends Extension {
     log(`[${ME}] Disabling extension...`);
 
     try {
-      // Remove keybinding
+      // Remove main keybinding
       Main.wm.removeKeybinding('trigger-shortcut');
-      log(`[${ME}] Keybinding removed`);
+      log(`[${ME}] Main keybinding removed`);
+
+      // Remove all app-specific shortcuts
+      this._removeAppShortcuts();
+
+      // Disconnect settings monitoring
+      if (this._settingsChangedId) {
+        this._settings.disconnect(this._settingsChangedId);
+        this._settingsChangedId = null;
+      }
 
       // Clean up settings
       this._settings = null;
@@ -421,6 +442,191 @@ export default class TriggerMoveWindows extends Extension {
     } catch (error) {
       logError(`[${ME}] Error moving window to workspace ${targetWorkspaceIndex}:`, error);
       return false;
+    }
+  }
+
+  _addAppShortcuts() {
+    try {
+      log(`[${ME}] Adding app-specific shortcuts...`);
+      const configuredApps = this._getConfiguredApps();
+      let shortcutCount = 0;
+
+      Object.entries(configuredApps).forEach(([appId, appConfig]) => {
+        const shortcut = typeof appConfig === 'object' ? appConfig.shortcut : '';
+        if (shortcut && shortcut.trim()) {
+          const shortcutId = `app-shortcut-${appId}`;
+
+          try {
+            // Create a temporary settings entry for this shortcut
+            this._settings.set_strv(shortcutId, [shortcut]);
+
+            Main.wm.addKeybinding(
+              shortcutId,
+              this._settings,
+              Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
+              Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+              () => {
+                log(`[${ME}] App shortcut triggered for: ${appId}`);
+                this._activateApp(appId);
+              }
+            );
+
+            this._appShortcuts.set(appId, shortcutId);
+            shortcutCount++;
+            log(`[${ME}] Registered shortcut ${shortcut} for app: ${appId}`);
+
+          } catch (error) {
+            logError(`[${ME}] Failed to register shortcut for ${appId}:`, error);
+          }
+        }
+      });
+
+      log(`[${ME}] Registered ${shortcutCount} app shortcuts`);
+    } catch (error) {
+      logError(`[${ME}] Error adding app shortcuts:`, error);
+    }
+  }
+
+  _removeAppShortcuts() {
+    try {
+      log(`[${ME}] Removing app shortcuts...`);
+      let removedCount = 0;
+
+      this._appShortcuts.forEach((shortcutId, appId) => {
+        try {
+          Main.wm.removeKeybinding(shortcutId);
+          // Clean up the temporary settings entry
+          this._settings.reset(shortcutId);
+          removedCount++;
+          log(`[${ME}] Removed shortcut for app: ${appId}`);
+        } catch (error) {
+          logError(`[${ME}] Error removing shortcut for ${appId}:`, error);
+        }
+      });
+
+      this._appShortcuts.clear();
+      log(`[${ME}] Removed ${removedCount} app shortcuts`);
+    } catch (error) {
+      logError(`[${ME}] Error removing app shortcuts:`, error);
+    }
+  }
+
+  _activateApp(appId) {
+    try {
+      log(`[${ME}] Activating app: ${appId}`);
+
+      // Get app configuration
+      const configuredApps = this._getConfiguredApps();
+      const appConfig = configuredApps[appId];
+      const displayName = typeof appConfig === 'object' ? appConfig.name : appId;
+
+      // Find running windows for this app
+      const windowTracker = Shell.WindowTracker.get_default();
+      const windows = global.get_window_actors()
+        .map(actor => actor.get_meta_window())
+        .filter(window => window && window.get_window_type() === Meta.WindowType.NORMAL);
+
+      const matchingWindows = [];
+
+      windows.forEach(metaWindow => {
+        const windowInfo = this._getEnhancedWindowInfo(metaWindow, windowTracker);
+
+        // Use same matching logic as window organization
+        if (this._appMatches(windowInfo, appId)) {
+          matchingWindows.push(metaWindow);
+        }
+      });
+
+      if (matchingWindows.length > 0) {
+        // Focus the most recent window
+        const targetWindow = matchingWindows.sort((a, b) => {
+          return b.get_user_time() - a.get_user_time();
+        })[0];
+
+        this._focusWindow(targetWindow);
+        Main.notify('Window Activated', `Focused ${displayName}`);
+        log(`[${ME}] Focused window for ${appId}: ${targetWindow.get_title()}`);
+      } else {
+        // Try to launch the application
+        this._launchApp(appId, displayName);
+      }
+
+    } catch (error) {
+      logError(`[${ME}] Error activating app ${appId}:`, error);
+      Main.notify('Activation Error', `Failed to activate ${appId}`);
+    }
+  }
+
+  _appMatches(windowInfo, appId) {
+    const appIdLower = appId.toLowerCase();
+    const matchStrategies = [
+      { value: windowInfo.appId, priority: 1 },
+      { value: windowInfo.wmClass, priority: 2 },
+      { value: windowInfo.appName, priority: 3 },
+      { value: windowInfo.process, priority: 4 },
+      { value: windowInfo.title, priority: 5 }
+    ];
+
+    const validStrategies = matchStrategies
+      .filter(strategy => strategy.value && strategy.value.trim())
+      .sort((a, b) => a.priority - b.priority);
+
+    for (const strategy of validStrategies) {
+      const matchValue = strategy.value.toLowerCase();
+      if (matchValue === appIdLower ||
+        matchValue.includes(appIdLower) ||
+        appIdLower.includes(matchValue)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _focusWindow(metaWindow) {
+    try {
+      // Switch to the window's workspace
+      const workspace = metaWindow.get_workspace();
+      if (workspace) {
+        workspace.activate(global.get_current_time());
+      }
+
+      // Activate and focus the window
+      metaWindow.activate(global.get_current_time());
+      metaWindow.focus(global.get_current_time());
+
+    } catch (error) {
+      logError(`[${ME}] Error focusing window:`, error);
+    }
+  }
+
+  _launchApp(appId, displayName) {
+    try {
+      log(`[${ME}] Attempting to launch app: ${appId}`);
+
+      // Try to find the app in the app system
+      const appSystem = Shell.AppSystem.get_default();
+      const app = appSystem.lookup_app(appId + '.desktop') ||
+        appSystem.lookup_app(appId);
+
+      if (app) {
+        app.launch(0, -1, Shell.AppLaunchGpu.APP_PREF);
+        Main.notify('Application Launched', `Started ${displayName}`);
+        log(`[${ME}] Launched app: ${appId}`);
+      } else {
+        // Try launching via command line as fallback
+        const subprocess = new Gio.Subprocess({
+          argv: [appId],
+          flags: Gio.SubprocessFlags.NONE
+        });
+        subprocess.init(null);
+
+        Main.notify('Application Started', `Attempted to start ${displayName}`);
+        log(`[${ME}] Attempted to launch via command: ${appId}`);
+      }
+
+    } catch (error) {
+      logError(`[${ME}] Error launching app ${appId}:`, error);
+      Main.notify('Launch Failed', `Could not start ${displayName}`);
     }
   }
 }
