@@ -81,8 +81,8 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     const scrolledWindow = new Gtk.ScrolledWindow({
       hscrollbar_policy: Gtk.PolicyType.NEVER,
       vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-      max_content_height: 800,
-      min_content_height: 300,
+      max_content_height: 1200,
+      min_content_height: 800,
     });
 
     const appListBox = new Gtk.ListBox({
