@@ -13,7 +13,7 @@
     <key name="app-configs" type="s">
       <default>'{}'</default>
       <summary>Configured applications list</summary>
-      <description>JSON object of configured applications with their settings (app_id, name, workspace, shortcut, icon)</description>
+      <description>JSON object of configured applications with their settings (app_id, name, workspace, shortcut, icon, verified)</description>
     </key>
 
     <!-- Application-specific shortcuts as JSON object -->

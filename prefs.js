@@ -23,6 +23,7 @@ import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';
 
+
 import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 export default class TriggerMoveWindowsPreferences extends ExtensionPreferences {
@@ -612,6 +613,67 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     refreshCallback();
   }
 
+  _detectRunningWindows() {
+    // Window detection not available in preferences context
+    // Meta and Shell APIs are only available in main extension process
+    log(`[TriggerMoveWindows] Window detection not available in preferences context`);
+    return [];
+  }
+
+  _findBestWindowMatch(userInput, detectedApps) {
+    const inputLower = userInput.toLowerCase();
+    let bestMatches = [];
+
+    detectedApps.forEach(app => {
+      let score = 0;
+      let matchType = '';
+
+      // Exact matches get highest score
+      if (app.appId === userInput) {
+        score = 100;
+        matchType = 'App ID (exact)';
+      } else if (app.wmClass.toLowerCase() === inputLower) {
+        score = 90;
+        matchType = 'WM Class (exact)';
+      } else if (app.process === userInput) {
+        score = 85;
+        matchType = 'Process (exact)';
+      } else if (app.appName.toLowerCase() === inputLower) {
+        score = 80;
+        matchType = 'App Name (exact)';
+      }
+      // Partial matches
+      else if (app.appId.toLowerCase().includes(inputLower)) {
+        score = 70;
+        matchType = 'App ID (partial)';
+      } else if (app.wmClass.toLowerCase().includes(inputLower)) {
+        score = 60;
+        matchType = 'WM Class (partial)';
+      } else if (app.appName.toLowerCase().includes(inputLower)) {
+        score = 50;
+        matchType = 'App Name (partial)';
+      } else if (app.process.toLowerCase().includes(inputLower)) {
+        score = 40;
+        matchType = 'Process (partial)';
+      } else if (app.title.toLowerCase().includes(inputLower)) {
+        score = 30;
+        matchType = 'Title (partial)';
+      }
+
+      if (score > 0) {
+        bestMatches.push({
+          ...app,
+          matchScore: score,
+          matchType: matchType
+        });
+      }
+    });
+
+    // Sort by score, highest first
+    bestMatches.sort((a, b) => b.matchScore - a.matchScore);
+    return bestMatches;
+  }
+
   _showSimpleAddDialog(parent, settings, addCallback) {
     log('[TriggerMoveWindows] Creating simple add dialog...');
 
@@ -630,11 +692,26 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       margin_end: 12,
     });
 
-    // App ID entry with common examples
+    // App ID entry with detect button
+    const appIdBox = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 6,
+      hexpand: true,
+    });
+
     const appIdEntry = new Gtk.Entry({
       placeholder_text: _('App ID: firefox, google-chrome, org.gnome.Terminal'),
       hexpand: true,
     });
+
+    const detectButton = new Gtk.Button({
+      icon_name: 'search-symbolic',
+      tooltip_text: _('Detect Running Application'),
+    });
+    detectButton.add_css_class('suggested-action');
+
+    appIdBox.append(appIdEntry);
+    appIdBox.append(detectButton);
 
     // Display name entry
     const nameEntry = new Gtk.Entry({
@@ -667,17 +744,43 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     workspaceBox.append(workspaceSpinButton);
 
     // Add some example text
-    const exampleLabel = new Gtk.Label({
-      label: _('Examples: firefox, google-chrome, code, org.gnome.Terminal'),
+    // Verification status area (initially hidden)
+    const verificationBox = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: 6,
+      visible: false,
+    });
+
+    const verificationLabel = new Gtk.Label({
+      label: _('🔍 Window Detection Results'),
       xalign: 0,
     });
+    verificationLabel.add_css_class('heading');
+
+    const verificationDetails = new Gtk.Label({
+      label: '',
+      xalign: 0,
+      wrap: true,
+    });
+    verificationDetails.add_css_class('caption');
+
+    verificationBox.append(verificationLabel);
+    verificationBox.append(verificationDetails);
+    content.append(verificationBox);
+
+    const exampleLabel = new Gtk.Label({
+      label: _('Examples: firefox, google-chrome, code, org.gnome.Terminal\nTip: Run the app first, then click the detect button!'),
+      xalign: 0,
+      wrap: true,
+    });
     exampleLabel.add_css_class('caption');
+    content.append(exampleLabel);
 
     content.append(new Gtk.Label({
-      label: _('Application ID:'),
+      label: _('Application ID'),
       xalign: 0,
     }));
-    content.append(appIdEntry);
+    content.append(appIdBox);
     content.append(exampleLabel);
     content.append(new Gtk.Label({
       label: _('Display Name:'),
@@ -688,6 +791,25 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
     dialog.set_extra_child(content);
 
+    // Store detected app data
+    let detectedAppData = null;
+
+    // Detect button handler (disabled for now - needs different approach)
+    detectButton.connect('clicked', () => {
+      verificationDetails.set_text(
+        '⚠️ Window detection temporarily disabled.\n' +
+        'Meta/Shell APIs not available in preferences context.\n' +
+        'For now, please enter the app ID manually:\n' +
+        '• notion-electron (for Notion)\n' +
+        '• slack (for Slack)\n' +
+        '• legcord (for Legcord)\n' +
+        '• firefox (for Firefox)'
+      );
+      verificationBox.set_visible(true);
+      detectedAppData = null;
+    });
+
+    // Add buttons
     dialog.add_response('cancel', _('Cancel'));
     dialog.add_response('add', _('Add'));
     dialog.set_response_appearance('add', Adw.ResponseAppearance.SUGGESTED);
@@ -703,16 +825,28 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
         if (appId) {
           try {
-            const appData = {
-              app_id: appId,
+            // Create app config with verified data if available
+            const appConfig = {
               name: name || appId,
               workspace: workspace,
-              shortcut: '',
-              icon: ''
+              shortcut: ''
             };
 
-            log(`[TriggerMoveWindows] Calling _updateAppConfig with: ${JSON.stringify(appData)}`);
-            this._updateAppConfig(settings, appId, { name: name || appId, workspace: workspace, shortcut: '' });
+            // Add verified window properties if detection was successful
+            if (detectedAppData) {
+              appConfig.verified = {
+                wmClass: detectedAppData.wmClass,
+                appId: detectedAppData.appId,
+                appName: detectedAppData.appName,
+                process: detectedAppData.process,
+                title: detectedAppData.title,
+                detectedAt: new Date().toISOString()
+              };
+              log(`[TriggerMoveWindows] Including verified data: ${JSON.stringify(appConfig.verified)}`);
+            }
+
+            log(`[TriggerMoveWindows] Calling _updateAppConfig with: ${JSON.stringify(appConfig)}`);
+            this._updateAppConfig(settings, appId, appConfig);
             addCallback(appId, workspace);
           } catch (error) {
             logError(error, '[TriggerMoveWindows] Error adding app');

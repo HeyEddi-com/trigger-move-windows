@@ -532,7 +532,7 @@ export default class TriggerMoveWindows extends Extension {
         const windowInfo = this._getEnhancedWindowInfo(metaWindow, windowTracker);
 
         // Use same matching logic as window organization
-        if (this._appMatches(windowInfo, appId)) {
+        if (this._appMatches(windowInfo, appConfig, appId)) {
           matchingWindows.push(metaWindow);
         }
       });
@@ -557,14 +557,40 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
-  _appMatches(windowInfo, appId) {
+  _appMatches(windowInfo, appConfig, appId) {
+    // First try verified properties if available
+    if (appConfig && appConfig.verified) {
+      const verified = appConfig.verified;
+
+      // Check exact matches against verified properties
+      if (verified.wmClass && windowInfo.wmClass === verified.wmClass) {
+        log(`[${ME}] Verified match by WM_CLASS: ${verified.wmClass}`);
+        return true;
+      }
+      if (verified.appId && windowInfo.appId === verified.appId) {
+        log(`[${ME}] Verified match by App ID: ${verified.appId}`);
+        return true;
+      }
+      if (verified.process && windowInfo.process === verified.process) {
+        log(`[${ME}] Verified match by Process: ${verified.process}`);
+        return true;
+      }
+      if (verified.appName && windowInfo.appName === verified.appName) {
+        log(`[${ME}] Verified match by App Name: ${verified.appName}`);
+        return true;
+      }
+
+      log(`[${ME}] No verified match found, using fallback matching for ${appId}`);
+    }
+
+    // Fallback to fuzzy matching for apps without verified data
     const appIdLower = appId.toLowerCase();
     const matchStrategies = [
-      { value: windowInfo.appId, priority: 1 },
-      { value: windowInfo.wmClass, priority: 2 },
-      { value: windowInfo.appName, priority: 3 },
-      { value: windowInfo.process, priority: 4 },
-      { value: windowInfo.title, priority: 5 }
+      { value: windowInfo.appId, priority: 1, type: 'appId' },
+      { value: windowInfo.wmClass, priority: 2, type: 'wmClass' },
+      { value: windowInfo.appName, priority: 3, type: 'appName' },
+      { value: windowInfo.process, priority: 4, type: 'process' },
+      { value: windowInfo.title, priority: 5, type: 'title' }
     ];
 
     const validStrategies = matchStrategies
@@ -573,10 +599,50 @@ export default class TriggerMoveWindows extends Extension {
 
     for (const strategy of validStrategies) {
       const matchValue = strategy.value.toLowerCase();
-      if (matchValue === appIdLower ||
-        matchValue.includes(appIdLower) ||
-        appIdLower.includes(matchValue)) {
+
+      // Exact match always wins
+      if (matchValue === appIdLower) {
         return true;
+      }
+
+      // For high-priority fields (appId, wmClass, appName), be more strict
+      if (strategy.priority <= 3) {
+        // Only allow contains match if the config is shorter (searching within the window property)
+        if (matchValue.includes(appIdLower) && appIdLower.length >= 3) {
+          return true;
+        }
+      }
+
+      // For title matches, allow partial matching both ways
+      if (strategy.type === 'title') {
+        if (matchValue.includes(appIdLower) || appIdLower.includes(matchValue)) {
+          return true;
+        }
+      }
+
+      // For process names, be very careful with electron apps
+      if (strategy.type === 'process') {
+        // Avoid generic electron matches unless very specific
+        if (appIdLower.includes('electron') && matchValue.includes('electron')) {
+          // Only match if we have a specific identifier beyond just 'electron'
+          const appParts = appIdLower.split(/[-_]/);
+          const processParts = matchValue.split(/[-_]/);
+
+          for (const appPart of appParts) {
+            if (appPart !== 'electron' && appPart.length >= 3) {
+              for (const processPart of processParts) {
+                if (processPart.includes(appPart) || appPart.includes(processPart)) {
+                  return true;
+                }
+              }
+            }
+          }
+        } else {
+          // Non-electron process matching
+          if (matchValue.includes(appIdLower) && appIdLower.length >= 3) {
+            return true;
+          }
+        }
       }
     }
     return false;
