@@ -37,6 +37,16 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     });
     window.add(page);
 
+    // General Settings Group
+    const generalGroup = new Adw.PreferencesGroup({
+      title: _('General Settings'),
+      description: _('Configure global extension behavior'),
+    });
+    page.add(generalGroup);
+
+    // Global shortcut configuration
+    this._createGlobalShortcutRow(generalGroup, settings, window);
+
     // Application Management Group
     const appManagementGroup = new Adw.PreferencesGroup({
       title: _('Application Management'),
@@ -1007,9 +1017,38 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     this._updateAppConfig(settings, appId, currentConfig);
   }
 
+  _createGlobalShortcutRow(group, settings, window) {
+    const row = new Adw.ActionRow({
+      title: _('Global Window Organization Shortcut'),
+      subtitle: _('Keyboard shortcut to organize all windows to their configured workspaces'),
+    });
+
+    // Get current global shortcut
+    const currentShortcut = settings.get_strv('trigger-shortcut')[0] || '<Super><Shift>m>';
+
+    const shortcutButton = new Gtk.Button({
+      label: this._getShortcutLabel([currentShortcut]),
+      valign: Gtk.Align.CENTER,
+      tooltip_text: _('Click to change global shortcut'),
+    });
+    shortcutButton.add_css_class('pill');
+
+    shortcutButton.connect('clicked', () => {
+      this._showShortcutDialog(window, (shortcut) => {
+        // Update the global shortcut setting
+        settings.set_strv('trigger-shortcut', [shortcut]);
+        shortcutButton.label = this._getShortcutLabel([shortcut]);
+        log(`[TriggerMoveWindows] Global shortcut updated to: ${shortcut}`);
+      });
+    });
+
+    row.add_suffix(shortcutButton);
+    group.add(row);
+  }
+
   _updateAppShortcut(settings, appId, shortcut) {
     log(`[TriggerMoveWindows] Shortcut for ${appId}: ${shortcut}`);
-    const configs = this._parseAppConfigs(settings);
+    const configs = this._parseAppConfigs(settings);``
     const currentConfig = configs[appId] || { name: appId, workspace: 1 };
     currentConfig.shortcut = shortcut;
     this._updateAppConfig(settings, appId, currentConfig);

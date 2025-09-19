@@ -4,11 +4,12 @@ Automatically organize application windows across workspaces with a single keybo
 
 ## 🚀 Features
 
-- **One-Key Organization**: Press `Super+Shift+M` to instantly move all configured applications to their designated workspaces
+- **One-Key Organization**: Press your configured shortcut (default `Super+Shift+M`) to instantly move all configured applications to their designated workspaces
+- **Configurable Global Shortcut**: Customize the main organization shortcut in preferences (default `Super+Shift+M`)
 - **Smart Window Matching**: Matches windows using WM_CLASS, window title, process name, and app ID
 - **Wayland & X11 Support**: Works with both native Wayland applications and XWayland/X11 apps
 - **Electron App Friendly**: Properly handles Electron applications like ClickUp, Beeper, and Mailspring
-- **Customizable Configurations**: Easy-to-use preferences UI for manalging app-workspace mappings
+- **Customizable Configurations**: Easy-to-use preferences UI for managing app-workspace mappings
 - **Visual Feedback**: Desktop notifications show results of window movement operations
 - **Performance Optimized**: Efficient window scanning that doesn't block the UI
 
@@ -113,9 +114,17 @@ The extension comes pre-configured with these application-workspace mappings:
 ### Basic Usage
 
 1. **Open your applications** normally across any workspaces
-2. **Press the keyboard shortcut** (default: `Super+Shift+M`)
+2. **Press the keyboard shortcut** (default: `Super+Shift+M`, configurable in preferences)
 3. **Watch the magic** - all configured applications automatically move to their designated workspaces
 4. **See the results** - desktop notification shows how many windows were moved
+
+### Customizing the Global Shortcut
+
+1. **Open preferences**: Right-click the extension in Extensions app and select "Preferences"
+2. **Find General Settings**: Look for the "General Settings" section at the top
+3. **Click the shortcut button**: Shows current shortcut (e.g., "Super+Shift+M")
+4. **Set new shortcut**: Press your desired key combination in the dialog
+5. **Apply immediately**: New shortcut works without restarting the extension
 
 ### Window Matching Logic
 
