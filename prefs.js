@@ -160,11 +160,32 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       tooltip_text: _('Edit Application'),
     });
     editButton.connect('clicked', () => {
-      this._showEditAppDialog(listBox.get_root(), settings, app, (newName) => {
-        // Update the display name in the label
-        appLabel.set_label(newName);
-        // Update the stored configuration
-        this._updateAppDisplayName(settings, app.app_id, newName);
+      // Get current configuration from storage to show latest values
+      const currentConfigs = this._parseAppConfigs(settings);
+      const currentConfig = currentConfigs[app.app_id] || app;
+      const currentApp = {
+        app_id: app.app_id,
+        name: currentConfig.name || app.app_id,
+        workspace: currentConfig.workspace || app.workspace,
+        shortcut: currentConfig.shortcut || app.shortcut || ''
+      };
+
+      this._showEditAppDialog(listBox.get_root(), settings, currentApp, (newAppId, newName) => {
+        // If app ID changed, we need to remove old config and add new one
+        if (newAppId !== app.app_id) {
+          this._removeAppConfig(settings, app.app_id);
+          removeCallback(app.app_id);
+          // Add new app with new ID
+          const configs = this._parseAppConfigs(settings);
+          configs[newAppId] = { name: newName, workspace: app.workspace, shortcut: app.shortcut || '' };
+          settings.set_string('app-configs', JSON.stringify(configs));
+          // Add new row
+          this._addNewAppRow(newAppId, app.workspace);
+        } else {
+          // Just update display name
+          appLabel.set_label(newName);
+          this._updateAppDisplayName(settings, app.app_id, newName);
+        }
       });
     });
 
@@ -829,7 +850,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   _showEditAppDialog(parent, settings, app, callback) {
     const dialog = new Adw.MessageDialog({
       heading: _('Edit Application'),
-      body: _('Modify application display name'),
+      body: _('Modify application ID and display name'),
       transient_for: parent,
     });
 
@@ -842,24 +863,42 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       margin_end: 12,
     });
 
+    // Application ID entry
+    const appIdEntry = new Gtk.Entry({
+      text: app.app_id,
+      placeholder_text: _('Application ID'),
+      hexpand: true,
+      editable: true,
+      can_focus: true,
+    });
+
+    // Display name entry
     const nameEntry = new Gtk.Entry({
       text: app.name || app.app_id,
       placeholder_text: _('Display name'),
       hexpand: true,
+      editable: true,
+      can_focus: true,
     });
 
-    const infoLabel = new Gtk.Label({
-      label: _(`Application ID: ${app.app_id}`),
+    // Example text
+    const exampleLabel = new Gtk.Label({
+      label: _('Examples: firefox, google-chrome, code, org.gnome.Terminal'),
       xalign: 0,
     });
-    infoLabel.add_css_class('caption');
+    exampleLabel.add_css_class('caption');
 
+    content.append(new Gtk.Label({
+      label: _('Application ID:'),
+      xalign: 0,
+    }));
+    content.append(appIdEntry);
+    content.append(exampleLabel);
     content.append(new Gtk.Label({
       label: _('Display Name:'),
       xalign: 0,
     }));
     content.append(nameEntry);
-    content.append(infoLabel);
 
     dialog.set_extra_child(content);
 
@@ -869,9 +908,10 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
     dialog.connect('response', (dialog, response) => {
       if (response === 'save') {
+        const newAppId = appIdEntry.get_text().trim();
         const newName = nameEntry.get_text().trim();
-        if (newName) {
-          callback(newName);
+        if (newAppId && newName) {
+          callback(newAppId, newName);
         }
       }
       dialog.destroy();
