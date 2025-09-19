@@ -95,8 +95,13 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     this._appListBox = appListBox;
 
     // Add configured applications to the list
-    Object.entries(configuredApps).forEach(([appId, workspace]) => {
-      const app = { app_id: appId, name: appId, workspace: workspace, shortcut: '' };
+    Object.entries(configuredApps).forEach(([appId, appConfig]) => {
+      const app = {
+        app_id: appId,
+        name: appConfig.name || appId,
+        workspace: appConfig.workspace || appConfig,
+        shortcut: appConfig.shortcut || ''
+      };
       this._addAppRow(appListBox, settings, app, availableWorkspaces, (appToRemove) => {
         // Remove specific app row directly
         this._removeAppRow(appToRemove);
@@ -219,7 +224,16 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       return;
     }
 
-    const app = { app_id: appId, name: appId, workspace: workspace, shortcut: '' };
+    // Get the stored configuration to retrieve the display name
+    const configs = this._parseAppConfigs(this._settings);
+    const storedConfig = configs[appId] || {};
+
+    const app = {
+      app_id: appId,
+      name: storedConfig.name || appId,
+      workspace: workspace,
+      shortcut: storedConfig.shortcut || ''
+    };
     const availableWorkspaces = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
     this._addAppRow(this._appListBox, this._settings, app, availableWorkspaces, (appToRemove) => {
@@ -655,7 +669,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
             };
 
             log(`[TriggerMoveWindows] Calling _updateAppConfig with: ${JSON.stringify(appData)}`);
-            this._updateAppConfig(settings, appId, workspace);
+            this._updateAppConfig(settings, appId, { name: name || appId, workspace: workspace, shortcut: '' });
             addCallback(appId, workspace);
           } catch (error) {
             logError(error, '[TriggerMoveWindows] Error adding app');
@@ -725,21 +739,33 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   _parseAppConfigs(settings) {
     const configString = settings.get_string('app-configs');
     try {
-      return JSON.parse(configString);
+      const configs = JSON.parse(configString);
+      // Handle backward compatibility: if value is just a number, convert to object
+      Object.keys(configs).forEach(appId => {
+        if (typeof configs[appId] === 'number') {
+          configs[appId] = { workspace: configs[appId], name: appId, shortcut: '' };
+        }
+      });
+      return configs;
     } catch (error) {
       console.error('Error parsing app configs:', error);
       return {};
     }
   }
 
-  _updateAppConfig(settings, appName, workspace) {
-    log(`[TriggerMoveWindows] _updateAppConfig called with: ${appName}, workspace: ${workspace}`);
+  _updateAppConfig(settings, appName, appConfig) {
+    log(`[TriggerMoveWindows] _updateAppConfig called with: ${appName}, config: ${JSON.stringify(appConfig)}`);
 
     try {
       const configs = this._parseAppConfigs(settings);
       log(`[TriggerMoveWindows] Current configs: ${JSON.stringify(configs)}`);
 
-      configs[appName] = workspace;
+      // If appConfig is just a number (workspace), convert to object for backward compatibility
+      if (typeof appConfig === 'number') {
+        configs[appName] = { workspace: appConfig, name: appName, shortcut: '' };
+      } else {
+        configs[appName] = appConfig;
+      }
 
       const jsonString = JSON.stringify(configs);
       log(`[TriggerMoveWindows] Setting app-configs to: ${jsonString}`);
@@ -759,7 +785,10 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _updateAppWorkspace(settings, appId, workspace) {
-    this._updateAppConfig(settings, appId, workspace);
+    const configs = this._parseAppConfigs(settings);
+    const currentConfig = configs[appId] || { name: appId, shortcut: '' };
+    currentConfig.workspace = workspace;
+    this._updateAppConfig(settings, appId, currentConfig);
   }
 
   _updateAppShortcut(settings, appId, shortcut) {
