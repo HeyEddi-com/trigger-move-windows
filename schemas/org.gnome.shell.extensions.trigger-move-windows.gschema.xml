@@ -23,6 +23,55 @@
       <description>JSON object mapping application IDs to their keyboard shortcuts</description>
     </key>
 
+    <!-- Individual app shortcut keys for proper keybinding registration -->
+    <key name="app-shortcut-mailspring" type="as">
+      <default>['']</default>
+      <summary>Shortcut for mailspring</summary>
+      <description>Keyboard shortcut to activate mailspring</description>
+    </key>
+
+    <key name="app-shortcut-beeper" type="as">
+      <default>['']</default>
+      <summary>Shortcut for beeper</summary>
+      <description>Keyboard shortcut to activate beeper</description>
+    </key>
+
+    <key name="app-shortcut-clickup" type="as">
+      <default>['']</default>
+      <summary>Shortcut for clickup</summary>
+      <description>Keyboard shortcut to activate clickup</description>
+    </key>
+
+    <key name="app-shortcut-slack" type="as">
+      <default>['']</default>
+      <summary>Shortcut for slack</summary>
+      <description>Keyboard shortcut to activate slack</description>
+    </key>
+
+    <key name="app-shortcut-legcord" type="as">
+      <default>['']</default>
+      <summary>Shortcut for legcord</summary>
+      <description>Keyboard shortcut to activate legcord</description>
+    </key>
+
+    <key name="app-shortcut-notion-electron" type="as">
+      <default>['']</default>
+      <summary>Shortcut for notion-electron</summary>
+      <description>Keyboard shortcut to activate notion-electron</description>
+    </key>
+
+    <key name="app-shortcut-zen" type="as">
+      <default>['']</default>
+      <summary>Shortcut for zen</summary>
+      <description>Keyboard shortcut to activate zen</description>
+    </key>
+
+    <key name="app-shortcut-spotify" type="as">
+      <default>['']</default>
+      <summary>Shortcut for spotify</summary>
+      <description>Keyboard shortcut to activate spotify</description>
+    </key>
+
     <!-- Available workspace numbers (1-based) -->
     <key name="available-workspaces" type="ai">
       <default>[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]</default>

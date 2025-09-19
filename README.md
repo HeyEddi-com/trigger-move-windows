@@ -14,11 +14,35 @@ Automatically organize application windows across workspaces with a single keybo
 
 ## 📦 Installation
 
-### Method 1: Manual Installation (Recommended for Development)
+### Method 1: GNOME Extensions Website (Recommended)
+
+1. **Visit the extension page**: [extensions.gnome.org](https://extensions.gnome.org/extension/XXXX/trigger-move-windows/) *(pending approval)*
+2. **Click the toggle switch** to install and enable
+3. **Configure settings** by clicking the gear icon or using the Extensions app
+
+### Method 2: Manual Installation from Release
+
+1. **Download the latest release**:
+   - Visit the [GitHub Releases page](https://github.com/eddimon/trigger-move-windows/releases)
+   - Download `trigger-move-windows@eddi.local.shell-extension.zip`
+
+2. **Install via Extensions app**:
+   ```bash
+   # Open Extensions app and click "Install Shell Extension"
+   # Or install via command line:
+   gnome-extensions install trigger-move-windows@eddi.local.shell-extension.zip
+   ```
+
+3. **Enable the extension**:
+   ```bash
+   gnome-extensions enable trigger-move-windows@eddi.local
+   ```
+
+### Method 3: Development Installation
 
 1. **Clone or download this extension**:
    ```bash
-   git clone <repository-url> ~/.local/share/gnome-shell/extensions/trigger-move-windows@eddi.local
+   git clone https://github.com/eddimon/trigger-move-windows.git ~/.local/share/gnome-shell/extensions/trigger-move-windows@eddi.local
    ```
 
 2. **Compile GSettings schema**:
@@ -37,11 +61,16 @@ Automatically organize application windows across workspaces with a single keybo
    ```
    Or use GNOME Extensions app.
 
-### Method 2: Using Extensions App
+### Installation Verification
 
-1. Open GNOME Extensions app
-2. Click "Install from local file" or drag the extension folder
-3. Enable "Trigger Move Windows"
+After installation, verify the extension is working:
+```bash
+# Check if extension is enabled
+gnome-extensions list --enabled | grep trigger-move-windows
+
+# Test the default keyboard shortcut
+# Press Super+Shift+M to trigger window organization
+```
 
 ## ⚙️ Configuration
 

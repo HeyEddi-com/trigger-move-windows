@@ -1,6 +1,7 @@
 'use strict';
 
 import Gio from 'gi://Gio';
+import Gtk from 'gi://Gtk';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -457,16 +458,17 @@ export default class TriggerMoveWindows extends Extension {
           const shortcutId = `app-shortcut-${appId}`;
 
           try {
-            // Create a temporary settings entry for this shortcut
+            // Set the shortcut value in GSettings (same pattern as main shortcut)
             this._settings.set_strv(shortcutId, [shortcut]);
 
+            // Register the keybinding using same method as main shortcut
             Main.wm.addKeybinding(
               shortcutId,
               this._settings,
               Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
               Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
               () => {
-                log(`[${ME}] App shortcut triggered for: ${appId}`);
+                log(`[${ME}] *** APP SHORTCUT TRIGGERED for: ${appId} with ${shortcut} ***`);
                 this._activateApp(appId);
               }
             );
@@ -495,8 +497,6 @@ export default class TriggerMoveWindows extends Extension {
       this._appShortcuts.forEach((shortcutId, appId) => {
         try {
           Main.wm.removeKeybinding(shortcutId);
-          // Clean up the temporary settings entry
-          this._settings.reset(shortcutId);
           removedCount++;
           log(`[${ME}] Removed shortcut for app: ${appId}`);
         } catch (error) {
