@@ -183,7 +183,16 @@ export default class TriggerMoveWindows extends Extension {
   _getConfiguredApps() {
     try {
       const configString = this._settings.get_string('app-configs');
-      return JSON.parse(configString);
+      const configs = JSON.parse(configString);
+
+      // Handle backward compatibility: if value is just a number, convert to object
+      Object.keys(configs).forEach(appId => {
+        if (typeof configs[appId] === 'number') {
+          configs[appId] = { workspace: configs[appId], name: appId, shortcut: '' };
+        }
+      });
+
+      return configs;
     } catch (error) {
       logError(`[${ME}] Error parsing app configs:`, error);
       return {};
@@ -274,8 +283,11 @@ export default class TriggerMoveWindows extends Extension {
       .filter(strategy => strategy.value && strategy.value.trim())
       .sort((a, b) => a.priority - b.priority);
 
-    for (const [appId, workspace] of Object.entries(configuredApps)) {
+    for (const [appId, appConfig] of Object.entries(configuredApps)) {
       const appIdLower = appId.toLowerCase();
+
+      // Handle both old format (number) and new format (object)
+      const workspace = typeof appConfig === 'object' ? appConfig.workspace : appConfig;
 
       for (const strategy of validStrategies) {
         const matchValue = strategy.value.toLowerCase();
@@ -351,8 +363,11 @@ export default class TriggerMoveWindows extends Extension {
       windowInfo.title?.toLowerCase()
     ];
 
-    for (const [appId, workspace] of Object.entries(configuredApps)) {
+    for (const [appId, appConfig] of Object.entries(configuredApps)) {
       const appIdLower = appId.toLowerCase();
+
+      // Handle both old format (number) and new format (object)
+      const workspace = typeof appConfig === 'object' ? appConfig.workspace : appConfig;
 
       for (const matchValue of matchStrategies) {
         if (matchValue && (
