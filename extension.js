@@ -44,7 +44,7 @@ export default class TriggerMoveWindows extends Extension {
 
     } catch (error) {
       logError(`[${ME}] Error during enable:`, error);
-      Main.notify('Extension Error', `Failed to enable: ${error.message}`);
+      this._showNotification('Extension Error', `Failed to enable: ${error.message}`, 'error');
     }
   }
 
@@ -71,6 +71,40 @@ export default class TriggerMoveWindows extends Extension {
       log(`[${ME}] Extension disabled successfully`);
     } catch (error) {
       logError(`[${ME}] Error during disable:`, error);
+    }
+  }
+
+  // Helper method to show notifications based on settings
+  _showNotification(title, message, notificationType = 'general') {
+    // Check global notification setting first
+    if (!this._settings.get_boolean('show-notifications')) {
+      return;
+    }
+
+    // Check specific notification type settings
+    let shouldShow = false;
+    switch (notificationType) {
+      case 'window-organization':
+        shouldShow = this._settings.get_boolean('notify-window-organization');
+        break;
+      case 'window-focus':
+        shouldShow = this._settings.get_boolean('notify-window-focus');
+        break;
+      case 'app-launch':
+        shouldShow = this._settings.get_boolean('notify-app-launch');
+        break;
+      case 'error':
+        shouldShow = this._settings.get_boolean('notify-errors');
+        break;
+      default:
+        shouldShow = true; // Show general notifications if type not specified
+    }
+
+    if (shouldShow) {
+      Main.notify(title, message);
+      log(`[${ME}] Notification shown: ${title} - ${message}`);
+    } else {
+      log(`[${ME}] Notification suppressed (${notificationType}): ${title} - ${message}`);
     }
   }
 
@@ -119,9 +153,8 @@ export default class TriggerMoveWindows extends Extension {
     log(`[${ME}] *** SHORTCUT HANDLER CALLED! ***`);
 
     try {
-      // Show notification using simple Main.notify
-      Main.notify('Window Organization', 'Organizing windows to configured workspaces...');
-      log(`[${ME}] Notification sent: Window Organization`);
+      // Show notification for window organization
+      this._showNotification('Window Organization', 'Organizing windows to configured workspaces...', 'window-organization');
 
       // Debug: Show available GNOME APIs and running apps
       this._debugGnomeAPIs();
@@ -133,7 +166,7 @@ export default class TriggerMoveWindows extends Extension {
 
     } catch (error) {
       logError(`[${ME}] Error in shortcut handler:`, error);
-      Main.notify('Error', `Failed to organize windows: ${error.message}`);
+      this._showNotification('Error', `Failed to organize windows: ${error.message}`, 'error');
     }
   }
 
@@ -146,7 +179,7 @@ export default class TriggerMoveWindows extends Extension {
       log(`[${ME}] Found ${Object.keys(configuredApps).length} configured applications`);
 
       if (Object.keys(configuredApps).length === 0) {
-        Main.notify('No Configuration', 'No applications configured for workspace assignment');
+        this._showNotification('No Configuration', 'No applications configured for workspace assignment', 'window-organization');
         return;
       }
 
@@ -189,10 +222,10 @@ export default class TriggerMoveWindows extends Extension {
       // Show completion notification
       if (movedCount > 0) {
         const appNames = Array.from(processedApps).join(', ');
-        Main.notify('Organization Complete', `Moved ${movedCount} windows (${appNames}) to configured workspaces`);
+        this._showNotification('Organization Complete', `Moved ${movedCount} windows (${appNames}) to configured workspaces`, 'window-organization');
         log(`[${ME}] Window organization completed: ${movedCount} windows moved for apps: ${appNames}`);
       } else {
-        Main.notify('No Matches Found', 'No open windows matched configured applications');
+        this._showNotification('No Matches Found', 'No open windows matched configured applications', 'window-organization');
         log(`[${ME}] Window organization completed: no windows moved`);
       }
 
@@ -544,7 +577,7 @@ export default class TriggerMoveWindows extends Extension {
         })[0];
 
         this._focusWindow(targetWindow);
-        Main.notify('Window Activated', `Focused ${displayName}`);
+        this._showNotification('Window Activated', `Focused ${displayName}`, 'window-focus');
         log(`[${ME}] Focused window for ${appId}: ${targetWindow.get_title()}`);
       } else {
         // Try to launch the application
@@ -553,7 +586,7 @@ export default class TriggerMoveWindows extends Extension {
 
     } catch (error) {
       logError(`[${ME}] Error activating app ${appId}:`, error);
-      Main.notify('Activation Error', `Failed to activate ${appId}`);
+      this._showNotification('Activation Error', `Failed to activate ${appId}`, 'error');
     }
   }
 
@@ -676,7 +709,7 @@ export default class TriggerMoveWindows extends Extension {
 
       if (app) {
         app.launch(0, -1, Shell.AppLaunchGpu.APP_PREF);
-        Main.notify('Application Launched', `Started ${displayName}`);
+        this._showNotification('Application Launched', `Started ${displayName}`, 'app-launch');
         log(`[${ME}] Launched app: ${appId}`);
       } else {
         // Try launching via command line as fallback
@@ -686,13 +719,13 @@ export default class TriggerMoveWindows extends Extension {
         });
         subprocess.init(null);
 
-        Main.notify('Application Started', `Attempted to start ${displayName}`);
+        this._showNotification('Application Started', `Attempted to start ${displayName}`, 'app-launch');
         log(`[${ME}] Attempted to launch via command: ${appId}`);
       }
 
     } catch (error) {
       logError(`[${ME}] Error launching app ${appId}:`, error);
-      Main.notify('Launch Failed', `Could not start ${displayName}`);
+      this._showNotification('Launch Failed', `Could not start ${displayName}`, 'error');
     }
   }
 }

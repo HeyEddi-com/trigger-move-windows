@@ -58,6 +58,59 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     this._appManagementGroup = appManagementGroup;
     this._createConfiguredAppsList(appManagementGroup, settings, window);
 
+    // Notification Settings Group
+    const notificationGroup = new Adw.PreferencesGroup({
+      title: _('Notification Settings'),
+      description: _('Configure when to show desktop notifications'),
+    });
+    page.add(notificationGroup);
+
+    // Master notification toggle
+    const showNotificationsRow = new Adw.SwitchRow({
+      title: _('Enable Notifications'),
+      subtitle: _('Show desktop notifications for extension activities'),
+    });
+    settings.bind('show-notifications', showNotificationsRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+    notificationGroup.add(showNotificationsRow);
+
+    // Window organization notifications
+    const windowOrgRow = new Adw.SwitchRow({
+      title: _('Window Organization'),
+      subtitle: _('Show notifications when organizing windows to workspaces'),
+    });
+    settings.bind('notify-window-organization', windowOrgRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+    notificationGroup.add(windowOrgRow);
+
+    // Window focus notifications
+    const windowFocusRow = new Adw.SwitchRow({
+      title: _('Window Focus'),
+      subtitle: _('Show notifications when focusing/activating windows'),
+    });
+    settings.bind('notify-window-focus', windowFocusRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+    notificationGroup.add(windowFocusRow);
+
+    // Application launch notifications
+    const appLaunchRow = new Adw.SwitchRow({
+      title: _('Application Launch'),
+      subtitle: _('Show notifications when starting applications'),
+    });
+    settings.bind('notify-app-launch', appLaunchRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+    notificationGroup.add(appLaunchRow);
+
+    // Error notifications
+    const errorRow = new Adw.SwitchRow({
+      title: _('Error Messages'),
+      subtitle: _('Show notifications for errors and failures'),
+    });
+    settings.bind('notify-errors', errorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+    notificationGroup.add(errorRow);
+
+    // Bind notification rows to master toggle for sensitivity
+    settings.bind('show-notifications', windowOrgRow, 'sensitive', Gio.SettingsBindFlags.DEFAULT);
+    settings.bind('show-notifications', windowFocusRow, 'sensitive', Gio.SettingsBindFlags.DEFAULT);
+    settings.bind('show-notifications', appLaunchRow, 'sensitive', Gio.SettingsBindFlags.DEFAULT);
+    settings.bind('show-notifications', errorRow, 'sensitive', Gio.SettingsBindFlags.DEFAULT);
+
   }
 
   _createConfiguredAppsList(group, settings, window) {
@@ -1048,7 +1101,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
   _updateAppShortcut(settings, appId, shortcut) {
     log(`[TriggerMoveWindows] Shortcut for ${appId}: ${shortcut}`);
-    const configs = this._parseAppConfigs(settings);``
+    const configs = this._parseAppConfigs(settings); ``
     const currentConfig = configs[appId] || { name: appId, workspace: 1 };
     currentConfig.shortcut = shortcut;
     this._updateAppConfig(settings, appId, currentConfig);

@@ -86,6 +86,34 @@
       <description>Whether to show desktop notifications when activating applications</description>
     </key>
 
+    <!-- Notification for window organization -->
+    <key name="notify-window-organization" type="b">
+      <default>true</default>
+      <summary>Show notifications for window organization</summary>
+      <description>Whether to show notifications when organizing windows to workspaces</description>
+    </key>
+
+    <!-- Notification for window focusing -->
+    <key name="notify-window-focus" type="b">
+      <default>true</default>
+      <summary>Show notifications when focusing windows</summary>
+      <description>Whether to show notifications when focusing/activating application windows</description>
+    </key>
+
+    <!-- Notification for application launching -->
+    <key name="notify-app-launch" type="b">
+      <default>true</default>
+      <summary>Show notifications when launching applications</summary>
+      <description>Whether to show notifications when starting new applications</description>
+    </key>
+
+    <!-- Notification for errors -->
+    <key name="notify-errors" type="b">
+      <default>true</default>
+      <summary>Show error notifications</summary>
+      <description>Whether to show notifications for errors and failures</description>
+    </key>
+
     <!-- Enable/disable debug logging -->
     <key name="debug-logging" type="b">
       <default>false</default>
