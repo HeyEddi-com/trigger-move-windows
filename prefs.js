@@ -1012,6 +1012,11 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       .replace(/<|>/g, '');
   }
 
+  _formatKeyComboToString(keyval, mask) {
+    // Standard GTK accelerator name (e.g., <Shift><Control>m)
+    return Gtk.accelerator_name(keyval, mask);
+  }
+
   _parseAppConfigs(settings) {
     const configString = settings.get_string('app-configs');
     try {
