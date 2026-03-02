@@ -22,6 +22,7 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';
+import Pango from 'gi://Pango';
 
 
 import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
@@ -368,9 +369,10 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
 
   _showAddAppDialog(parent, settings, addCallback) {
-    log('[TriggerMoveWindows] Opening simplified application dialog...');
-    // Use simplified version for now until debugging is complete
-    this._showSimpleAddDialog(parent, settings, addCallback);
+    log('[TriggerMoveWindows] Opening application browser dialog...');
+    this._showApplicationBrowser(parent, settings, () => {
+      // Refresh logic if needed, but addCallback is called inside _showApplicationBrowser
+    });
   }
 
   _showApplicationBrowser(parent, settings, refreshCallback) {
@@ -381,7 +383,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       use_header_bar: 1,
     });
 
-    dialog.set_default_size(500, 600);
+    dialog.set_default_size(550, 700);
 
     const content = dialog.get_content_area();
     content.set_spacing(12);
@@ -390,32 +392,33 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     content.set_margin_start(12);
     content.set_margin_end(12);
 
-    // Search bar
+    // Search bar with clear button
     const searchEntry = new Gtk.SearchEntry({
-      placeholder_text: _('Search applications...'),
+      placeholder_text: _('Search applications by name or ID...'),
       hexpand: true,
     });
 
-    // Workspace selection
-    const workspaceBox = new Gtk.Box({
-      orientation: Gtk.Orientation.HORIZONTAL,
-      spacing: 12,
-      margin_top: 6,
+    // Workspace selection with label and spin button
+    const workspaceGroup = new Adw.PreferencesGroup({
+      title: _('Workspace Assignment'),
     });
-    workspaceBox.append(new Gtk.Label({
-      label: _('Assign to workspace:'),
-    }));
-
-    const availableWorkspaces = settings.get_value('available-workspaces').deep_unpack();
+    
+    const workspaceRow = new Adw.ActionRow({
+      title: _('Target Workspace'),
+      subtitle: _('New application will be assigned to this workspace'),
+    });
+    
     const workspaceSpinButton = new Gtk.SpinButton({
       adjustment: new Gtk.Adjustment({
-        lower: Math.min(...availableWorkspaces),
-        upper: Math.max(...availableWorkspaces),
+        lower: 1,
+        upper: 10,
         step_increment: 1,
         value: 1,
       }),
+      valign: Gtk.Align.CENTER,
     });
-    workspaceBox.append(workspaceSpinButton);
+    workspaceRow.add_suffix(workspaceSpinButton);
+    workspaceGroup.add(workspaceRow);
 
     // Scrolled window for applications list
     const scrolledWindow = new Gtk.ScrolledWindow({
@@ -423,7 +426,10 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
       hexpand: true,
       vexpand: true,
+      propagate_natural_height: true,
+      min_content_height: 400,
     });
+    scrolledWindow.add_css_class('view');
 
     const appListBox = new Gtk.ListBox({
       selection_mode: Gtk.SelectionMode.SINGLE,
@@ -432,7 +438,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     scrolledWindow.set_child(appListBox);
 
     content.append(searchEntry);
-    content.append(workspaceBox);
+    content.append(workspaceGroup);
     content.append(scrolledWindow);
 
     // Load and populate applications
@@ -450,22 +456,23 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
         child = next;
       }
 
+      const filterLower = filter.toLowerCase();
       // Filter and add applications
       const filteredApps = installedApps.filter(app =>
-        app.name.toLowerCase().includes(filter.toLowerCase()) ||
-        app.app_id.toLowerCase().includes(filter.toLowerCase()) ||
-        (app.description && app.description.toLowerCase().includes(filter.toLowerCase()))
+        app.name.toLowerCase().includes(filterLower) ||
+        app.app_id.toLowerCase().includes(filterLower) ||
+        (app.description && app.description.toLowerCase().includes(filterLower))
       );
 
       filteredApps.forEach(app => {
         const row = new Gtk.ListBoxRow();
         const box = new Gtk.Box({
           orientation: Gtk.Orientation.HORIZONTAL,
-          spacing: 12,
-          margin_top: 8,
-          margin_bottom: 8,
-          margin_start: 12,
-          margin_end: 12,
+          spacing: 16,
+          margin_top: 10,
+          margin_bottom: 10,
+          margin_start: 16,
+          margin_end: 16,
         });
 
         // Icon
@@ -473,7 +480,6 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
           pixel_size: 32,
           valign: Gtk.Align.CENTER,
         });
-
         this._setIconOnImage(iconImage, app.icon);
 
         // App info
@@ -486,6 +492,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
         const nameLabel = new Gtk.Label({
           label: app.name,
           xalign: 0,
+          ellipsize: Pango.EllipsizeMode.END,
         });
         nameLabel.add_css_class('heading');
 
@@ -494,21 +501,22 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
           xalign: 0,
         });
         idLabel.add_css_class('dim-label');
+        idLabel.add_css_class('caption');
+
+        infoBox.append(nameLabel);
+        infoBox.append(idLabel);
 
         if (app.description) {
           const descLabel = new Gtk.Label({
             label: app.description,
             xalign: 0,
             wrap: true,
-            max_width_chars: 50,
+            max_width_chars: 40,
+            lines: 1,
+            ellipsize: Pango.EllipsizeMode.END,
           });
           descLabel.add_css_class('caption');
-          infoBox.append(nameLabel);
-          infoBox.append(idLabel);
           infoBox.append(descLabel);
-        } else {
-          infoBox.append(nameLabel);
-          infoBox.append(idLabel);
         }
 
         box.append(iconImage);
@@ -630,6 +638,14 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     }
   }
 
+  _hasKey(keyFile, group, key) {
+    try {
+      return keyFile.get_keys(group).includes(key);
+    } catch (e) {
+      return false;
+    }
+  }
+
   _parseDesktopFile(filePath) {
     try {
       const keyFile = new GLib.KeyFile();
@@ -645,19 +661,19 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       } catch (e) { return null; }
 
       // Check TryExec
-      if (keyFile.has_key(group, 'TryExec')) {
+      if (this._hasKey(keyFile, group, 'TryExec')) {
         const tryExec = keyFile.get_string(group, 'TryExec');
         if (!GLib.find_program_in_path(tryExec)) return null;
       }
 
       // Check if hidden or not shown in menus
-      if (keyFile.has_key(group, 'Hidden')) {
+      if (this._hasKey(keyFile, group, 'Hidden')) {
         try {
           if (keyFile.get_boolean(group, 'Hidden')) return null;
         } catch (e) {}
       }
 
-      if (keyFile.has_key(group, 'NoDisplay')) {
+      if (this._hasKey(keyFile, group, 'NoDisplay')) {
         try {
           if (keyFile.get_boolean(group, 'NoDisplay')) return null;
         } catch (e) {}
@@ -678,16 +694,19 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       try {
         description = keyFile.get_locale_string(group, 'Comment', null);
       } catch (e) {
-        try { description = keyFile.get_string(group, 'Comment'); } catch (e2) {}
+        try { 
+          if (this._hasKey(keyFile, group, 'Comment'))
+            description = keyFile.get_string(group, 'Comment'); 
+        } catch (e2) {}
       }
 
       let icon = '';
-      if (keyFile.has_key(group, 'Icon')) {
+      if (this._hasKey(keyFile, group, 'Icon')) {
         try { icon = keyFile.get_string(group, 'Icon'); } catch (e) {}
       }
 
       let exec = '';
-      if (keyFile.has_key(group, 'Exec')) {
+      if (this._hasKey(keyFile, group, 'Exec')) {
         try { exec = keyFile.get_string(group, 'Exec'); } catch (e) {}
       }
 
@@ -706,14 +725,20 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _addSelectedApp(settings, app, workspace, refreshCallback) {
-    this._addConfiguredApp(settings, {
-      app_id: app.app_id,
+    const appConfig = {
       name: app.name,
       workspace: workspace,
       shortcut: '',
       icon: app.icon
-    });
-    refreshCallback();
+    };
+    
+    log(`[TriggerMoveWindows] Adding selected app ${app.app_id}: ${JSON.stringify(appConfig)}`);
+    this._updateAppConfig(settings, app.app_id, appConfig);
+    
+    // Call the parent callback to refresh the UI
+    if (this._addNewAppRow) {
+      this._addNewAppRow(app.app_id, workspace);
+    }
   }
 
   _detectRunningWindows() {
