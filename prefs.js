@@ -27,6 +27,92 @@ import Pango from 'gi://Pango';
 
 import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+/**
+ * Handles recording keyboard shortcuts in the preferences UI
+ */
+class ShortcutRecorder {
+  constructor(button, settings, appId, formatLabelFunc, updateShortcutFunc) {
+    this._button = button;
+    this._settings = settings;
+    this._appId = appId;
+    this._formatLabelFunc = formatLabelFunc;
+    this._updateShortcutFunc = updateShortcutFunc;
+    this._state = 'IDLE';
+    this._originalLabel = button.label;
+    this._originalShortcut = ''; // Will be fetched on start
+
+    this._controller = new Gtk.EventControllerKey();
+    this._button.add_controller(this._controller);
+
+    this._controller.connect('key-pressed', (controller, keyval, keycode, state) => {
+      return this._onKeyPressed(keyval, state);
+    });
+  }
+
+  _onKeyPressed(keyval, state) {
+    if (this._state !== 'RECORDING') {
+      return false;
+    }
+
+    // Handle Escape for cancellation
+    if (keyval === Gdk.KEY_Escape) {
+      this.stop(false);
+      return true;
+    }
+
+    // Get modifiers
+    const mask = state & Gtk.accelerator_get_default_mod_mask();
+    
+    // We need at least one modifier or a function key
+    const isModifier = (keyval === Gdk.KEY_Control_L || keyval === Gdk.KEY_Control_R ||
+                        keyval === Gdk.KEY_Alt_L || keyval === Gdk.KEY_Alt_R ||
+                        keyval === Gdk.KEY_Shift_L || keyval === Gdk.KEY_Shift_R ||
+                        keyval === Gdk.KEY_Super_L || keyval === Gdk.KEY_Super_R);
+
+    if (isModifier) {
+      // Just modifiers pressed, keep recording
+      return true;
+    }
+
+    // Convert to string
+    const shortcut = Gtk.accelerator_name(keyval, mask);
+    if (shortcut) {
+      this._newShortcut = shortcut;
+      this.stop(true);
+      return true;
+    }
+
+    return false;
+  }
+
+  start() {
+    if (this._state === 'RECORDING') return;
+
+    this._state = 'RECORDING';
+    this._button.add_css_class('recording');
+    this._button.label = _('New accelerator...');
+    this._button.grab_focus();
+    
+    log(`[TriggerMoveWindows] Started recording shortcut for ${this._appId}`);
+  }
+
+  stop(save = true) {
+    if (this._state !== 'RECORDING') return;
+
+    this._state = 'IDLE';
+    this._button.remove_css_class('recording');
+
+    if (save && this._newShortcut) {
+      log(`[TriggerMoveWindows] Saved new shortcut for ${this._appId}: ${this._newShortcut}`);
+      this._updateShortcutFunc(this._settings, this._appId, this._newShortcut);
+      this._button.label = this._formatLabelFunc([this._newShortcut]);
+    } else {
+      log(`[TriggerMoveWindows] Cancelled recording for ${this._appId}`);
+      this._button.label = this._originalLabel;
+    }
+  }
+}
+
 export default class TriggerMoveWindowsPreferences extends ExtensionPreferences {
   fillPreferencesWindow(window) {
     const settings = this.getSettings('org.gnome.shell.extensions.trigger-move-windows');
