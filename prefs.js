@@ -31,13 +31,14 @@ import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/
  * Handles recording keyboard shortcuts in the preferences UI
  */
 class ShortcutRecorder {
-  constructor(button, settings, appId, formatLabelFunc, updateShortcutFunc, checkConflictFunc) {
+  constructor(button, settings, appId, formatLabelFunc, updateShortcutFunc, checkConflictFunc, statusCallback) {
     this._button = button;
     this._settings = settings;
     this._appId = appId;
     this._formatLabelFunc = formatLabelFunc;
     this._updateShortcutFunc = updateShortcutFunc;
     this._checkConflictFunc = checkConflictFunc;
+    this._statusCallback = statusCallback;
     this._state = 'IDLE';
     this._originalLabel = button.label;
     this._originalShortcut = ''; 
@@ -51,6 +52,7 @@ class ShortcutRecorder {
   }
 
   _onKeyPressed(keyval, state) {
+    log(`[TriggerMoveWindows] Key pressed: val=${keyval}, state=${state}`);
     if (this._state !== 'RECORDING') {
       return false;
     }
@@ -58,6 +60,13 @@ class ShortcutRecorder {
     // Handle Escape for cancellation
     if (keyval === Gdk.KEY_Escape) {
       this.stop(false);
+      return true;
+    }
+
+    // Handle BackSpace or Delete to clear
+    if (keyval === Gdk.KEY_BackSpace || keyval === Gdk.KEY_Delete) {
+      this._newShortcut = '';
+      this.stop(true);
       return true;
     }
 
@@ -89,13 +98,12 @@ class ShortcutRecorder {
         }
         
         // Temporarily change label to show conflict
-        const oldLabel = this._button.label;
         this._button.label = msg;
         this._button.add_css_class('error');
         
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
           if (this._state === 'RECORDING') {
-            this._button.label = _('New accelerator...');
+            this._button.label = _('Recording…');
             this._button.remove_css_class('error');
           }
           return GLib.SOURCE_REMOVE;
@@ -116,9 +124,15 @@ class ShortcutRecorder {
     if (this._state === 'RECORDING') return;
 
     this._state = 'RECORDING';
+    this._button.set_focusable(true);
+    this._button.set_can_focus(true);
     this._button.add_css_class('recording');
-    this._button.label = _('New accelerator...');
+    this._button.label = _('Recording…');
     this._button.grab_focus();
+    
+    if (this._statusCallback) {
+      this._statusCallback(_('Press any key to set shortcut. BackSpace to clear, Esc to cancel.'));
+    }
     
     log(`[TriggerMoveWindows] Started recording shortcut for ${this._appId}`);
   }
@@ -128,9 +142,13 @@ class ShortcutRecorder {
 
     this._state = 'IDLE';
     this._button.remove_css_class('recording');
+    
+    if (this._statusCallback) {
+      this._statusCallback(null);
+    }
 
-    if (save && this._newShortcut) {
-      log(`[TriggerMoveWindows] Saved new shortcut for ${this._appId}: ${this._newShortcut}`);
+    if (save) {
+      log(`[TriggerMoveWindows] Saving shortcut for ${this._appId}: "${this._newShortcut}"`);
       this._updateShortcutFunc(this._settings, this._appId, this._newShortcut);
       this._button.label = this._formatLabelFunc([this._newShortcut]);
     } else {
@@ -429,7 +447,14 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       app.app_id,
       this._getShortcutLabel.bind(this),
       this._updateAppShortcut.bind(this),
-      this._checkShortcutConflicts.bind(this)
+      this._checkShortcutConflicts.bind(this),
+      (msg) => {
+        if (msg) {
+          this._appManagementGroup.description = msg;
+        } else {
+          this._appManagementGroup.description = _('Configure applications and their workspace assignments');
+        }
+      }
     );
 
     shortcutButton.connect('clicked', () => {
@@ -1205,7 +1230,14 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
         settings.set_strv('trigger-shortcut', [shortcut]);
         log(`[TriggerMoveWindows] Global shortcut updated to: ${shortcut}`);
       },
-      this._checkShortcutConflicts.bind(this)
+      this._checkShortcutConflicts.bind(this),
+      (msg) => {
+        if (msg) {
+          group.description = msg;
+        } else {
+          group.description = _('Configure global extension behavior');
+        }
+      }
     );
 
     shortcutButton.connect('clicked', () => {
