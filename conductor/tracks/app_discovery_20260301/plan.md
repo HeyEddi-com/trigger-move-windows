@@ -1,9 +1,9 @@
 # Implementation Plan: Application Discovery Improvements
 
-## Phase 1: Core Discovery Logic
-- [ ] Task: Implement robust `.desktop` file parser in `prefs.js`
-- [ ] Task: Create helper to resolve icon names to actual GIcon or file paths
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Discovery Logic' (Protocol in workflow.md)
+## Phase 1: Core Discovery Logic [checkpoint: bd1a376]
+- [x] Task: Implement robust `.desktop` file parser in `prefs.js`
+- [x] Task: Create helper to resolve icon names to actual GIcon or file paths
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Discovery Logic' (Protocol in workflow.md)
 
 ## Phase 2: UI Implementation
 - [ ] Task: Create searchable `Adw.Window` or `Gtk.Dialog` for app selection
