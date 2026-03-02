@@ -9,5 +9,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Interactive Shortcut Selector**
+- [x] **Track: Interactive Shortcut Selector**
   *Link: [./tracks/shortcut_selector_20260301/](./tracks/shortcut_selector_20260301/)*
