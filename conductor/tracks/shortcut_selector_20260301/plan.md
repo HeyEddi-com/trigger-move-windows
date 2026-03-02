@@ -2,12 +2,12 @@
 
 This track implements an interactive shortcut recording experience in the preferences UI, replacing manual text entry.
 
-## Phase 1: Research and UI Prototyping
-- [ ] Task: Research `Gtk.EventControllerKey` and event capturing in GNOME Shell preferences.
-- [ ] Task: Write failing test for key combination to string conversion logic.
-- [ ] Task: Implement `_formatKeyComboToString` helper to convert Gdk key events to GTK accelerator format.
-- [ ] Task: Verify conversion logic passes tests and commit.
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Research and Core Logic' (Protocol in workflow.md)
+## Phase 1: Research and UI Prototyping [checkpoint: 04be46c]
+- [x] Task: Research `Gtk.EventControllerKey` and event capturing in GNOME Shell preferences.
+- [x] Task: Write failing test for key combination to string conversion logic.
+- [x] Task: Implement `_formatKeyComboToString` helper to convert Gdk key events to GTK accelerator format.
+- [x] Task: Verify conversion logic passes tests and commit. 6b980f4
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Research and Core Logic' (Protocol in workflow.md)
 
 ## Phase 2: Recording State and Visual Feedback
 - [ ] Task: Write failing tests for recording state management (start, cancel, finish).
