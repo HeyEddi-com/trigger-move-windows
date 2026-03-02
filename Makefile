@@ -96,14 +96,14 @@ compile-schemas:
 	@echo "Schemas compiled"
 
 package: clean
-        @echo "Creating installation package (zip)..."
-        @mkdir -p dist
-        @zip -jr dist/$(EXTENSION_NAME).zip $(EXTENSION_FILES)
-        @mkdir -p dist/schemas
-        @cp schemas/$(SCHEMA_FILE) dist/schemas/
-        @cd dist && zip -r $(EXTENSION_NAME).zip schemas/$(SCHEMA_FILE)
-        @rm -rf dist/schemas
-        @echo "Package created: dist/$(EXTENSION_NAME).zip"
+	@echo "Creating installation package (zip)..."
+	@mkdir -p dist
+	@zip -jr dist/$(EXTENSION_NAME).zip $(EXTENSION_FILES)
+	@mkdir -p dist/schemas
+	@cp schemas/$(SCHEMA_FILE) dist/schemas/
+	@cd dist && zip -r $(EXTENSION_NAME).zip schemas/$(SCHEMA_FILE)
+	@rm -rf dist/schemas
+	@echo "Package created: dist/$(EXTENSION_NAME).zip"
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf dist/
