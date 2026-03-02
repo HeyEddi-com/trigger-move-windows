@@ -422,11 +422,18 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       tooltip_text: _('Click to set keyboard shortcut'),
     });
 
+    // Initialize the interactive recorder
+    const recorder = new ShortcutRecorder(
+      shortcutButton,
+      settings,
+      app.app_id,
+      this._getShortcutLabel.bind(this),
+      this._updateAppShortcut.bind(this),
+      this._checkShortcutConflicts.bind(this)
+    );
+
     shortcutButton.connect('clicked', () => {
-      this._showShortcutDialog(listBox.get_root(), (shortcut) => {
-        this._updateAppShortcut(settings, app.app_id, shortcut);
-        shortcutButton.label = this._getShortcutLabel([shortcut].filter(Boolean));
-      });
+      recorder.start();
     });
 
     settingsBox.append(workspaceLabel);
@@ -1267,13 +1274,21 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     });
     shortcutButton.add_css_class('pill');
 
-    shortcutButton.connect('clicked', () => {
-      this._showShortcutDialog(window, (shortcut) => {
-        // Update the global shortcut setting
+    // Initialize the interactive recorder for global shortcut
+    const recorder = new ShortcutRecorder(
+      shortcutButton,
+      settings,
+      'trigger-shortcut',
+      this._getShortcutLabel.bind(this),
+      (settings, id, shortcut) => {
         settings.set_strv('trigger-shortcut', [shortcut]);
-        shortcutButton.label = this._getShortcutLabel([shortcut]);
         log(`[TriggerMoveWindows] Global shortcut updated to: ${shortcut}`);
-      });
+      },
+      this._checkShortcutConflicts.bind(this)
+    );
+
+    shortcutButton.connect('clicked', () => {
+      recorder.start();
     });
 
     row.add_suffix(shortcutButton);
