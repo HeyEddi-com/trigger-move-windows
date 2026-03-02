@@ -10,11 +10,11 @@ This track implements an interactive shortcut recording experience in the prefer
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Research and Core Logic' (Protocol in workflow.md)
 
 ## Phase 2: Recording State and Visual Feedback
-- [ ] Task: Write failing tests for recording state management (start, cancel, finish).
-- [ ] Task: Implement `ShortcutRecorder` class or state machine in `prefs.js`.
-- [ ] Task: Add CSS classes for "pulsing" effect and update `stylesheet.css`.
-- [ ] Task: Verify state management and visual transitions and commit.
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Recording UI' (Protocol in workflow.md)
+- [x] Task: Write failing tests for recording state management (start, cancel, finish).
+- [x] Task: Implement `ShortcutRecorder` class or state machine in `prefs.js`.
+- [x] Task: Add CSS classes for "pulsing" effect and update `stylesheet.css`.
+- [x] Task: Verify state management and visual transitions and commit. 6cc6d72
+- [~] Task: Conductor - User Manual Verification 'Phase 2: Recording UI' (Protocol in workflow.md)
 
 ## Phase 3: Conflict Checking and Validation
 - [ ] Task: Write failing tests for shortcut conflict detection (internal and system).
