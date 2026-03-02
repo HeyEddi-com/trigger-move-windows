@@ -72,6 +72,100 @@
       <description>Keyboard shortcut to activate spotify</description>
     </key>
 
+    <key name="app-shortcut-thunderbird" type="as">
+      <default>['']</default>
+      <summary>Shortcut for thunderbird</summary>
+      <description>Keyboard shortcut to activate thunderbird</description>
+    </key>
+
+    <key name="app-shortcut-firefox" type="as">
+      <default>['']</default>
+      <summary>Shortcut for firefox</summary>
+      <description>Keyboard shortcut to activate firefox</description>
+    </key>
+
+    <key name="app-shortcut-chrome" type="as">
+      <default>['']</default>
+      <summary>Shortcut for chrome</summary>
+      <description>Keyboard shortcut to activate chrome</description>
+    </key>
+
+    <key name="app-shortcut-vscode" type="as">
+      <default>['']</default>
+      <summary>Shortcut for vscode</summary>
+      <description>Keyboard shortcut to activate vscode</description>
+    </key>
+
+    <key name="app-shortcut-terminal" type="as">
+      <default>['']</default>
+      <summary>Shortcut for terminal</summary>
+      <description>Keyboard shortcut to activate terminal</description>
+    </key>
+
+    <key name="app-shortcut-alacritty" type="as">
+      <default>['']</default>
+      <summary>Shortcut for alacritty</summary>
+      <description>Keyboard shortcut to activate alacritty</description>
+    </key>
+
+    <key name="app-shortcut-gnome-about-panel" type="as">
+      <default>['']</default>
+      <summary>Shortcut for gnome-about-panel</summary>
+      <description>Keyboard shortcut to activate gnome-about-panel</description>
+    </key>
+
+
+    <key name="app-shortcut-custom-1" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 1</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-2" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 2</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-3" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 3</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-4" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 4</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-5" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 5</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-6" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 6</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-7" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 7</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-8" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 8</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-9" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 9</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+    <key name="app-shortcut-custom-10" type="as">
+      <default>['']</default>
+      <summary>Custom Shortcut 10</summary>
+      <description>Generic shortcut for additional applications</description>
+    </key>
+
     <!-- Available workspace numbers (1-based) -->
     <key name="available-workspaces" type="ai">
       <default>[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]</default>

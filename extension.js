@@ -31,16 +31,17 @@ export default class TriggerMoveWindows extends Extension {
       this._addKeybindings();
 
       // Add individual app shortcuts
-      this._addAppShortcuts();
+      this._registerAppShortcuts();
 
       // Monitor settings changes to refresh shortcuts
       this._settingsChangedId = this._settings.connect('changed::app-configs', () => {
         log(`[${ME}] App configs changed, refreshing shortcuts...`);
         this._removeAppShortcuts();
-        this._addAppShortcuts();
+        this._registerAppShortcuts();
       });
 
-      log(`[${ME}] Extension enabled successfully`);
+      Main.notify('Trigger Move Windows', 'Version 2.0 (Pool + Schema Fix) Loaded');
+      log(`[${ME}] Extension enabled successfully (V2)`);
 
     } catch (error) {
       logError(`[${ME}] Error during enable:`, error);
@@ -479,46 +480,76 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
-  _addAppShortcuts() {
+  _registerAppShortcuts() {
     try {
-      log(`[${ME}] Adding app-specific shortcuts...`);
+      log(`[${ME}] Registering app-specific shortcuts (Dynamic Logic)...`);
       const configuredApps = this._getConfiguredApps();
       let shortcutCount = 0;
+      
+      // Get list of available keys in the schema
+      const availableKeys = this._settings.list_keys();
 
       Object.entries(configuredApps).forEach(([appId, appConfig]) => {
         const shortcut = typeof appConfig === 'object' ? appConfig.shortcut : '';
         if (shortcut && shortcut.trim()) {
-          const shortcutId = `app-shortcut-${appId}`;
+          // Normalize ID for lookup
+          const normalizedId = appId.toLowerCase()
+            .replace('.desktop', '')
+            .replace(/\./g, '-');
+            
+          let schemaKey = `app-shortcut-${normalizedId}`;
+          
+          // Check if we have a matching schema key
+          if (!availableKeys.includes(schemaKey)) {
+            // Fallback to pool if specific key missing
+            log(`[${ME}] Schema key ${schemaKey} missing, searching for available pool key...`);
+            
+            // Look for first available custom-n key not in use
+            for (let i = 1; i <= 10; i++) {
+              let poolKey = `app-shortcut-custom-${i}`;
+              if (!Array.from(this._appShortcuts.values()).includes(poolKey)) {
+                schemaKey = poolKey;
+                break;
+              }
+            }
+          }
+
+          if (!availableKeys.includes(schemaKey)) {
+            log(`[${ME}] Could not find ANY valid schema key for ${appId}`);
+            return;
+          }
 
           try {
-            // Set the shortcut value in GSettings (same pattern as main shortcut)
-            this._settings.set_strv(shortcutId, [shortcut]);
+            log(`[${ME}] Attempting to bind ${shortcut} to ${appId} using ${schemaKey}`);
+            
+            // Update the setting value first
+            this._settings.set_strv(schemaKey, [shortcut]);
 
-            // Register the keybinding using same method as main shortcut
+            // Register with GNOME Shell
             Main.wm.addKeybinding(
-              shortcutId,
+              schemaKey,
               this._settings,
               Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
               Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
               () => {
-                log(`[${ME}] *** APP SHORTCUT TRIGGERED for: ${appId} with ${shortcut} ***`);
+                log(`[${ME}] *** APP SHORTCUT TRIGGERED: ${appId} ***`);
                 this._activateApp(appId);
               }
             );
 
-            this._appShortcuts.set(appId, shortcutId);
+            this._appShortcuts.set(appId, schemaKey);
             shortcutCount++;
-            log(`[${ME}] Registered shortcut ${shortcut} for app: ${appId}`);
+            log(`[${ME}] SUCCESSFULLY registered ${appId} on ${schemaKey}`);
 
           } catch (error) {
-            logError(`[${ME}] Failed to register shortcut for ${appId}:`, error);
+            logError(`[${ME}] FAILED to register ${appId}:`, error);
           }
         }
       });
 
-      log(`[${ME}] Registered ${shortcutCount} app shortcuts`);
+      log(`[${ME}] Finished: ${shortcutCount} shortcuts registered`);
     } catch (error) {
-      logError(`[${ME}] Error adding app shortcuts:`, error);
+      logError(`[${ME}] Error in _registerAppShortcuts:`, error);
     }
   }
 
@@ -683,15 +714,29 @@ export default class TriggerMoveWindows extends Extension {
 
   _focusWindow(metaWindow) {
     try {
+      const display = global.display;
+      const windowTracker = Shell.WindowTracker.get_default();
+      const app = windowTracker.get_window_app(metaWindow);
+      const appName = app ? app.get_name() : metaWindow.get_title();
+
+      log(`[${ME}] Focusing window: ${metaWindow.get_title()} for app: ${appName}`);
+
       // Switch to the window's workspace
       const workspace = metaWindow.get_workspace();
       if (workspace) {
-        workspace.activate(global.get_current_time());
+        log(`[${ME}] Switching to workspace ${workspace.index() + 1}`);
+        workspace.activate(display.get_current_time());
       }
 
       // Activate and focus the window
-      metaWindow.activate(global.get_current_time());
-      metaWindow.focus(global.get_current_time());
+      // Use Meta.display.get_current_time() or 0 for activation
+      const timestamp = display.get_current_time() || 0;
+      metaWindow.activate(timestamp);
+      
+      // Ensure it's on the current monitor if multi-monitor
+      // metaWindow.move_to_monitor(display.get_current_monitor());
+
+      log(`[${ME}] Window activated successfully`);
 
     } catch (error) {
       logError(`[${ME}] Error focusing window:`, error);
@@ -700,19 +745,49 @@ export default class TriggerMoveWindows extends Extension {
 
   _launchApp(appId, displayName) {
     try {
-      log(`[${ME}] Attempting to launch app: ${appId}`);
+      log(`[${ME}] Attempting to launch app: ${appId} (DisplayName: ${displayName})`);
 
       // Try to find the app in the app system
       const appSystem = Shell.AppSystem.get_default();
-      const app = appSystem.lookup_app(appId + '.desktop') ||
+      let app = appSystem.lookup_app(appId + '.desktop') ||
         appSystem.lookup_app(appId);
 
+      // If exact ID lookup fails, search for an app with a matching name or command
+      if (!app) {
+        log(`[${ME}] Exact app ID lookup failed for '${appId}', searching installed apps...`);
+        const installedApps = appSystem.get_installed();
+        
+        const appIdLower = appId.toLowerCase();
+        const nameLower = displayName.toLowerCase();
+
+        // Search for best match in installed apps
+        for (const installedApp of installedApps) {
+          const installedId = installedApp.get_id().toLowerCase();
+          const installedName = installedApp.get_name().toLowerCase();
+          const installedDesc = installedApp.get_description() ? installedApp.get_description().toLowerCase() : '';
+
+          // Look for various matches
+          if (installedId.includes(appIdLower) || 
+              appIdLower.includes(installedId) ||
+              installedName === nameLower ||
+              installedName === appIdLower ||
+              (nameLower.length >= 3 && installedName.includes(nameLower)) ||
+              (appIdLower.length >= 3 && installedName.includes(appIdLower))) {
+            
+            log(`[${ME}] Found potential match in installed apps: ${installedApp.get_id()} (${installedApp.get_name()})`);
+            app = installedApp;
+            break;
+          }
+        }
+      }
+
       if (app) {
+        log(`[${ME}] Launching app: ${app.get_id()} (${app.get_name()})`);
         app.launch(0, -1, Shell.AppLaunchGpu.APP_PREF);
-        this._showNotification('Application Launched', `Started ${displayName}`, 'app-launch');
-        log(`[${ME}] Launched app: ${appId}`);
+        this._showNotification('Application Launched', `Started ${app.get_name() || displayName}`, 'app-launch');
       } else {
-        // Try launching via command line as fallback
+        // Try launching via command line as absolute fallback
+        log(`[${ME}] Still no app found in system, trying command-line fallback for: ${appId}`);
         const subprocess = new Gio.Subprocess({
           argv: [appId],
           flags: Gio.SubprocessFlags.NONE
@@ -720,12 +795,11 @@ export default class TriggerMoveWindows extends Extension {
         subprocess.init(null);
 
         this._showNotification('Application Started', `Attempted to start ${displayName}`, 'app-launch');
-        log(`[${ME}] Attempted to launch via command: ${appId}`);
       }
 
     } catch (error) {
       logError(`[${ME}] Error launching app ${appId}:`, error);
-      this._showNotification('Launch Failed', `Could not start ${displayName}`, 'error');
+      this._showNotification('Launch Failed', `Could not start ${displayName}: ${error.message}`, 'error');
     }
   }
 }

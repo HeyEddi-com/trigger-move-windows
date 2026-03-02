@@ -448,6 +448,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     let selectedApp = null;
 
     const populateList = (filter = '') => {
+      const startTime = Date.now();
       // Clear existing rows
       let child = appListBox.get_first_child();
       while (child) {
@@ -525,6 +526,9 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
         row._appData = app;
         appListBox.append(row);
       });
+      
+      const duration = Date.now() - startTime;
+      log(`[TriggerMoveWindows] Populated list with ${filteredApps.length} apps in ${duration}ms`);
     };
 
     // Initial population
@@ -564,61 +568,65 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _scanInstalledApplications() {
-    const applications = [];
-    const dataDirs = GLib.get_system_data_dirs();
-    const userDataDir = GLib.get_user_data_dir();
+    const appsById = new Map();
     
-    const allDirs = [
-      GLib.build_filenamev([userDataDir, 'applications']),
-      ...dataDirs.map(dir => GLib.build_filenamev([dir, 'applications']))
-    ];
-    
-    // Also include flatpak exports if not already in dataDirs
-    const flatpakDir = '/var/lib/flatpak/exports/share/applications';
-    if (!allDirs.includes(flatpakDir)) {
-      allDirs.push(flatpakDir);
-    }
+    // Use Gio.AppInfo to get all installed applications - much more robust
+    const appInfos = Gio.AppInfo.get_all();
+    log(`[TriggerMoveWindows] Gio found ${appInfos.length} total applications`);
 
-    log(`[TriggerMoveWindows] Scanning directories: ${allDirs.join(', ')}`);
-
-    allDirs.forEach(dirPath => {
+    appInfos.forEach(appInfo => {
       try {
-        const dir = Gio.File.new_for_path(dirPath);
-        if (!dir.query_exists(null)) {
-          return;
+        // Only interested in desktop apps
+        if (!(appInfo instanceof Gio.DesktopAppInfo)) return;
+        
+        // Skip hidden/no-display apps
+        if (appInfo.get_nodisplay() || appInfo.should_show() === false) return;
+
+        const appId = appInfo.get_id();
+        const name = appInfo.get_name();
+        
+        // Get icon - can be a name or a path
+        let icon = '';
+        const gicon = appInfo.get_icon();
+        if (gicon) {
+          icon = gicon.to_string();
         }
 
-        const enumerator = dir.enumerate_children(
-          'standard::name,standard::type',
-          Gio.FileQueryInfoFlags.NONE,
-          null
-        );
+        const app = {
+          app_id: appId.toLowerCase().replace('.desktop', ''),
+          name: name,
+          description: appInfo.get_description() || '',
+          icon: icon,
+          hidden: false
+        };
 
-        let fileInfo;
-        while ((fileInfo = enumerator.next_file(null)) !== null) {
-          const fileName = fileInfo.get_name();
-          if (!fileName.endsWith('.desktop')) continue;
-
-          const desktopFile = dir.get_child(fileName);
-          const app = this._parseDesktopFile(desktopFile.get_path());
-
-          if (app && !app.hidden && !applications.find(existing => existing.app_id === app.app_id)) {
-            applications.push(app);
-          }
+        // Deduplicate by app_id
+        if (!appsById.has(app.app_id)) {
+          appsById.set(app.app_id, app);
         }
       } catch (error) {
-        // Only log serious errors, not just "directory not found"
-        if (!error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
-          logError(error, `[TriggerMoveWindows] Error scanning ${dirPath}`);
-        }
+        logError(error, `[TriggerMoveWindows] Error processing app info`);
       }
     });
 
-    // Sort applications by name
-    return applications.sort((a, b) => a.name.localeCompare(b.name));
+    // Deduplicate by Name to handle multiple desktop files for the same app
+    const appsByName = new Map();
+    for (const app of appsById.values()) {
+      const existing = appsByName.get(app.name);
+      // Prefer the one with the "standard" looking ID if there's a duplicate name
+      if (!existing || app.app_id.length < existing.app_id.length) {
+        appsByName.set(app.name, app);
+      }
+    }
+
+    const result = Array.from(appsByName.values());
+    log(`[TriggerMoveWindows] Found ${result.length} unique applications after Gio scan`);
+    return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   _setIconOnImage(image, iconNameOrPath) {
+    image.set_pixel_size(32);
+    
     if (!iconNameOrPath) {
       image.set_from_icon_name('application-x-executable');
       return;
@@ -627,100 +635,24 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     try {
       if (iconNameOrPath.startsWith('/')) {
         const file = Gio.File.new_for_path(iconNameOrPath);
-        const icon = new Gio.FileIcon({ file });
-        image.set_from_gicon(icon);
+        if (file.query_exists(null)) {
+          const icon = new Gio.FileIcon({ file });
+          image.set_from_gicon(icon);
+        } else {
+          image.set_from_icon_name('application-x-executable');
+        }
       } else {
-        image.set_from_icon_name(iconNameOrPath);
+        // iconNameOrPath might be a serialized GIcon string from to_string()
+        try {
+          const gicon = Gio.Icon.new_for_string(iconNameOrPath);
+          image.set_from_gicon(gicon);
+        } catch (e) {
+          // Fallback to simple name
+          image.set_from_icon_name(iconNameOrPath);
+        }
       }
     } catch (error) {
-      log(`[TriggerMoveWindows] Error setting icon ${iconNameOrPath}: ${error.message}`);
       image.set_from_icon_name('application-x-executable');
-    }
-  }
-
-  _hasKey(keyFile, group, key) {
-    try {
-      return keyFile.get_keys(group).includes(key);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  _parseDesktopFile(filePath) {
-    try {
-      const keyFile = new GLib.KeyFile();
-      keyFile.load_from_file(filePath, GLib.KeyFileFlags.NONE);
-
-      const group = 'Desktop Entry';
-      if (!keyFile.has_group(group)) return null;
-
-      // Only handle type Application
-      try {
-        const type = keyFile.get_string(group, 'Type');
-        if (type !== 'Application') return null;
-      } catch (e) { return null; }
-
-      // Check TryExec
-      if (this._hasKey(keyFile, group, 'TryExec')) {
-        const tryExec = keyFile.get_string(group, 'TryExec');
-        if (!GLib.find_program_in_path(tryExec)) return null;
-      }
-
-      // Check if hidden or not shown in menus
-      if (this._hasKey(keyFile, group, 'Hidden')) {
-        try {
-          if (keyFile.get_boolean(group, 'Hidden')) return null;
-        } catch (e) {}
-      }
-
-      if (this._hasKey(keyFile, group, 'NoDisplay')) {
-        try {
-          if (keyFile.get_boolean(group, 'NoDisplay')) return null;
-        } catch (e) {}
-      }
-
-      // Get localized name and comment
-      let name = '';
-      try {
-        name = keyFile.get_locale_string(group, 'Name', null);
-      } catch (e) {
-        try { name = keyFile.get_string(group, 'Name'); } catch (e2) { return null; }
-      }
-
-      const fileName = GLib.path_get_basename(filePath);
-      const appId = fileName.replace('.desktop', '');
-
-      let description = '';
-      try {
-        description = keyFile.get_locale_string(group, 'Comment', null);
-      } catch (e) {
-        try { 
-          if (this._hasKey(keyFile, group, 'Comment'))
-            description = keyFile.get_string(group, 'Comment'); 
-        } catch (e2) {}
-      }
-
-      let icon = '';
-      if (this._hasKey(keyFile, group, 'Icon')) {
-        try { icon = keyFile.get_string(group, 'Icon'); } catch (e) {}
-      }
-
-      let exec = '';
-      if (this._hasKey(keyFile, group, 'Exec')) {
-        try { exec = keyFile.get_string(group, 'Exec'); } catch (e) {}
-      }
-
-      return {
-        app_id: appId,
-        name: name,
-        description: description,
-        icon: icon,
-        exec: exec,
-        hidden: false
-      };
-    } catch (error) {
-      // Don't spam logs for every parsing failure
-      return null;
     }
   }
 
