@@ -280,6 +280,15 @@ dbus-send --session --type=method_call --dest=org.gnome.Shell /org/gnome/Shell o
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version.
 
+## 💖 Support the Project
+
+If you find this extension useful and want to support its development, you can:
+
+- **Become a Sponsor** on [GitHub Sponsors](https://github.com/sponsors/heyeddi)
+- **Buy me a coffee** on [Ko-fi](https://ko-fi.com/heyeddi)
+
+Your support helps keep the project maintained and improved!
+
 ## 🐛 Bug Reports & Feature Requests
 
 Please report issues and feature requests through the project's issue tracker. Include:

@@ -243,6 +243,53 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     settings.bind('show-notifications', appLaunchRow, 'sensitive', Gio.SettingsBindFlags.DEFAULT);
     settings.bind('show-notifications', errorRow, 'sensitive', Gio.SettingsBindFlags.DEFAULT);
 
+    // About & Support Group
+    const supportGroup = new Adw.PreferencesGroup({
+      title: _('About & Support'),
+      description: _('Support the development of this extension'),
+    });
+    page.add(supportGroup);
+
+    // Support button
+    const supportRow = new Adw.ActionRow({
+      title: _('Support Development'),
+      subtitle: _('Buy me a coffee on Ko-fi if you like this extension'),
+      activatable: true,
+    });
+    
+    const supportIcon = new Gtk.Image({
+      icon_name: 'external-link-symbolic',
+    });
+    supportRow.add_suffix(supportIcon);
+    
+    supportRow.connect('activated', () => {
+      Gio.AppInfo.launch_default_for_uri('https://ko-fi.com/heyeddi', null);
+    });
+    supportGroup.add(supportRow);
+
+    // Project Website
+    const websiteRow = new Adw.ActionRow({
+      title: _('Project Website'),
+      subtitle: 'https://github.com/HeyEddi-com/trigger-move-windows',
+      activatable: true,
+    });
+    
+    const websiteIcon = new Gtk.Image({
+      icon_name: 'external-link-symbolic',
+    });
+    websiteRow.add_suffix(websiteIcon);
+    
+    websiteRow.connect('activated', () => {
+      Gio.AppInfo.launch_default_for_uri('https://github.com/HeyEddi-com/trigger-move-windows', null);
+    });
+    supportGroup.add(websiteRow);
+
+    // Version info
+    const versionRow = new Adw.ActionRow({
+      title: _('Version'),
+      subtitle: '2.0.0',
+    });
+    supportGroup.add(versionRow);
   }
 
   _createConfiguredAppsList(group, settings, window) {
