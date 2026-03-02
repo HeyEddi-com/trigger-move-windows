@@ -15,7 +15,7 @@ Trigger Move Windows is a productivity-focused GNOME Shell extension that empowe
 - **Intelligent App Launching:** Automatically searches for matching installed applications even if their desktop file IDs don't perfectly match the configured ID.
 - **Scalable Shortcut Management:** Support for a pool of custom shortcuts, allowing users to assign hotkeys to any application without extension-specific updates.
 - **Customizable Preferences:** A user-friendly preferences UI to manage application-to-workspace mappings and toggle features like notifications and debug logging.
-
+- **Interactive Application Browser:** Easily browse and search through all installed applications with icons to quickly add them to your configuration.
 - **Visual Feedback:** Desktop notifications to confirm the results of window movement operations.
 - **Wayland & X11 Support:** Full compatibility with modern Linux display servers.
 
