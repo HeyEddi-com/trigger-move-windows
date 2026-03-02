@@ -9,7 +9,7 @@
     "48",
     "49"
   ],
-  "url": "https://github.com/eddimon/trigger-move-windows",
+  "url": "https://github.com/HeyEddi-com/trigger-move-windows",
   "version": 1,
   "settings-schema": "org.gnome.shell.extensions.trigger-move-windows",
   "gettext-domain": "trigger-move-windows"
