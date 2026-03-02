@@ -1,7 +1,7 @@
 {
   "uuid": "trigger-move-windows@eddi.local",
   "name": "Trigger Move Windows",
-  "description": "Automatically organize windows across workspaces with keyboard shortcut",
+  "description": "Automatically organize your workspace with a single shortcut. Move application windows to their designated workspaces, activate running apps, or launch new ones instantly. Features include an interactive shortcut recorder and intelligent application discovery.",
   "shell-version": [
     "45",
     "46",
@@ -10,5 +10,7 @@
     "49"
   ],
   "url": "https://github.com/eddimon/trigger-move-windows",
-  "version": 1
+  "version": 1,
+  "settings-schema": "org.gnome.shell.extensions.trigger-move-windows",
+  "gettext-domain": "trigger-move-windows"
 }
