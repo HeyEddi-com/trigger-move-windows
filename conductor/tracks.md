@@ -4,7 +4,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Application Discovery Improvements**
+- [x] **Track: Application Discovery Improvements**
   *Link: [./tracks/app_discovery_20260301/](./tracks/app_discovery_20260301/)*
 
 ---
