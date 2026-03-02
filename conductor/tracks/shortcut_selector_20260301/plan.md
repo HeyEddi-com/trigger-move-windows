@@ -17,11 +17,11 @@ This track implements an interactive shortcut recording experience in the prefer
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Recording UI' (Protocol in workflow.md)
 
 ## Phase 3: Conflict Checking and Validation
-- [ ] Task: Write failing tests for shortcut conflict detection (internal and system).
-- [ ] Task: Implement `_checkShortcutConflicts` method to scan existing `app-configs`.
-- [ ] Task: Implement basic system shortcut conflict checking (best-effort).
-- [ ] Task: Verify conflict detection logic and commit.
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Validation' (Protocol in workflow.md)
+- [x] Task: Write failing tests for shortcut conflict detection (internal and system).
+- [x] Task: Implement `_checkShortcutConflicts` method to scan existing `app-configs`.
+- [x] Task: Implement basic system shortcut conflict checking (best-effort).
+- [x] Task: Verify conflict detection logic and commit. f3c7f98
+- [~] Task: Conductor - User Manual Verification 'Phase 3: Validation' (Protocol in workflow.md)
 
 ## Phase 4: Integration and Persistence
 - [ ] Task: Integrate `ShortcutRecorder` into the application rows in the main preferences view.
