@@ -31,15 +31,16 @@ import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/
  * Handles recording keyboard shortcuts in the preferences UI
  */
 class ShortcutRecorder {
-  constructor(button, settings, appId, formatLabelFunc, updateShortcutFunc) {
+  constructor(button, settings, appId, formatLabelFunc, updateShortcutFunc, checkConflictFunc) {
     this._button = button;
     this._settings = settings;
     this._appId = appId;
     this._formatLabelFunc = formatLabelFunc;
     this._updateShortcutFunc = updateShortcutFunc;
+    this._checkConflictFunc = checkConflictFunc;
     this._state = 'IDLE';
     this._originalLabel = button.label;
-    this._originalShortcut = ''; // Will be fetched on start
+    this._originalShortcut = ''; 
 
     this._controller = new Gtk.EventControllerKey();
     this._button.add_controller(this._controller);
@@ -77,6 +78,32 @@ class ShortcutRecorder {
     // Convert to string
     const shortcut = Gtk.accelerator_name(keyval, mask);
     if (shortcut) {
+      // Check for conflicts
+      const conflict = this._checkConflictFunc(this._settings, this._appId, shortcut);
+      if (conflict) {
+        let msg = '';
+        if (conflict.type === 'internal') {
+          msg = _(`Shortcut already used by: ${conflict.name}`);
+        } else {
+          msg = _(`Shortcut conflicts with system: ${conflict.name}`);
+        }
+        
+        // Temporarily change label to show conflict
+        const oldLabel = this._button.label;
+        this._button.label = msg;
+        this._button.add_css_class('error');
+        
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+          if (this._state === 'RECORDING') {
+            this._button.label = _('New accelerator...');
+            this._button.remove_css_class('error');
+          }
+          return GLib.SOURCE_REMOVE;
+        });
+        
+        return true;
+      }
+
       this._newShortcut = shortcut;
       this.stop(true);
       return true;
@@ -1101,6 +1128,72 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   _formatKeyComboToString(keyval, mask) {
     // Standard GTK accelerator name (e.g., <Shift><Control>m)
     return Gtk.accelerator_name(keyval, mask);
+  }
+
+  _checkShortcutConflicts(settings, appId, shortcut) {
+    // 1. Check internal conflicts (other apps in this extension)
+    const internalConflict = this._checkInternalConflicts(settings, appId, shortcut);
+    if (internalConflict) {
+      return { type: 'internal', name: internalConflict };
+    }
+
+    // 2. Check system conflicts (basic best-effort)
+    const systemConflict = this._checkSystemConflicts(shortcut);
+    if (systemConflict) {
+      return { type: 'system', name: systemConflict };
+    }
+
+    return null;
+  }
+
+  _checkInternalConflicts(settings, appId, shortcut) {
+    const configs = this._parseAppConfigs(settings);
+    for (const [id, config] of Object.entries(configs)) {
+      if (id === appId) continue;
+      
+      const appShortcut = typeof config === 'object' ? config.shortcut : '';
+      if (appShortcut === shortcut) {
+        return config.name || id;
+      }
+    }
+    return null;
+  }
+
+  _checkSystemConflicts(shortcut) {
+    const systemSchemas = [
+      'org.gnome.desktop.wm.keybindings',
+      'org.gnome.shell.keybindings',
+      'org.gnome.mutter.keybindings',
+      'org.gnome.settings-daemon.plugins.media-keys'
+    ];
+
+    for (const schemaId of systemSchemas) {
+      try {
+        const source = Gio.SettingsSchemaSource.get_default();
+        const schema = source.lookup(schemaId, true);
+        if (!schema) continue;
+
+        const settings = new Gio.Settings({ schema_id: schemaId });
+        const keys = schema.list_keys();
+
+        for (const key of keys) {
+          const value = settings.get_value(key);
+          const type = value.get_type_string();
+
+          // Shortcuts are either 's' (string) or 'as' (array of strings)
+          if (type === 's') {
+            if (value.deep_unpack() === shortcut) return `${schemaId}:${key}`;
+          } else if (type === 'as') {
+            const arr = value.deep_unpack();
+            if (arr.includes(shortcut)) return `${schemaId}:${key}`;
+          }
+        }
+      } catch (e) {
+        // Silently skip schemas that don't exist or fail
+      }
+    }
+
+    return null;
   }
 
   _parseAppConfigs(settings) {
