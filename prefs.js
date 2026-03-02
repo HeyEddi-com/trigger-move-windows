@@ -474,15 +474,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
           valign: Gtk.Align.CENTER,
         });
 
-        if (app.icon) {
-          try {
-            iconImage.set_from_icon_name(app.icon);
-          } catch (error) {
-            iconImage.set_from_icon_name('application-x-executable');
-          }
-        } else {
-          iconImage.set_from_icon_name('application-x-executable');
-        }
+        this._setIconOnImage(iconImage, app.icon);
 
         // App info
         const infoBox = new Gtk.Box({
@@ -565,18 +557,26 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
   _scanInstalledApplications() {
     const applications = [];
-    const systemAppDirs = ['/usr/share/applications', '/var/lib/flatpak/exports/share/applications'];
-    const userAppDir = GLib.build_filenamev([GLib.get_home_dir(), '.local', 'share', 'applications']);
+    const dataDirs = GLib.get_system_data_dirs();
+    const userDataDir = GLib.get_user_data_dir();
+    
+    const allDirs = [
+      GLib.build_filenamev([userDataDir, 'applications']),
+      ...dataDirs.map(dir => GLib.build_filenamev([dir, 'applications']))
+    ];
+    
+    // Also include flatpak exports if not already in dataDirs
+    const flatpakDir = '/var/lib/flatpak/exports/share/applications';
+    if (!allDirs.includes(flatpakDir)) {
+      allDirs.push(flatpakDir);
+    }
 
-    const allDirs = [...systemAppDirs, userAppDir];
     log(`[TriggerMoveWindows] Scanning directories: ${allDirs.join(', ')}`);
 
     allDirs.forEach(dirPath => {
       try {
-        log(`[TriggerMoveWindows] Scanning directory: ${dirPath}`);
         const dir = Gio.File.new_for_path(dirPath);
         if (!dir.query_exists(null)) {
-          log(`[TriggerMoveWindows] Directory does not exist: ${dirPath}`);
           return;
         }
 
@@ -587,12 +587,10 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
         );
 
         let fileInfo;
-        let fileCount = 0;
         while ((fileInfo = enumerator.next_file(null)) !== null) {
           const fileName = fileInfo.get_name();
           if (!fileName.endsWith('.desktop')) continue;
 
-          fileCount++;
           const desktopFile = dir.get_child(fileName);
           const app = this._parseDesktopFile(desktopFile.get_path());
 
@@ -600,14 +598,36 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
             applications.push(app);
           }
         }
-        log(`[TriggerMoveWindows] Found ${fileCount} .desktop files in ${dirPath}`);
       } catch (error) {
-        logError(error, `[TriggerMoveWindows] Error scanning ${dirPath}`);
+        // Only log serious errors, not just "directory not found"
+        if (!error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
+          logError(error, `[TriggerMoveWindows] Error scanning ${dirPath}`);
+        }
       }
     });
 
     // Sort applications by name
     return applications.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  _setIconOnImage(image, iconNameOrPath) {
+    if (!iconNameOrPath) {
+      image.set_from_icon_name('application-x-executable');
+      return;
+    }
+
+    try {
+      if (iconNameOrPath.startsWith('/')) {
+        const file = Gio.File.new_for_path(iconNameOrPath);
+        const icon = new Gio.FileIcon({ file });
+        image.set_from_gicon(icon);
+      } else {
+        image.set_from_icon_name(iconNameOrPath);
+      }
+    } catch (error) {
+      log(`[TriggerMoveWindows] Error setting icon ${iconNameOrPath}: ${error.message}`);
+      image.set_from_icon_name('application-x-executable');
+    }
   }
 
   _parseDesktopFile(filePath) {
@@ -618,37 +638,57 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       const group = 'Desktop Entry';
       if (!keyFile.has_group(group)) return null;
 
-      const type = keyFile.get_string(group, 'Type');
-      if (type !== 'Application') return null;
+      // Only handle type Application
+      try {
+        const type = keyFile.get_string(group, 'Type');
+        if (type !== 'Application') return null;
+      } catch (e) { return null; }
+
+      // Check TryExec
+      if (keyFile.has_key(group, 'TryExec')) {
+        const tryExec = keyFile.get_string(group, 'TryExec');
+        if (!GLib.find_program_in_path(tryExec)) return null;
+      }
 
       // Check if hidden or not shown in menus
       if (keyFile.has_key(group, 'Hidden')) {
-        const hidden = keyFile.get_boolean(group, 'Hidden');
-        if (hidden) return null;
+        try {
+          if (keyFile.get_boolean(group, 'Hidden')) return null;
+        } catch (e) {}
       }
 
       if (keyFile.has_key(group, 'NoDisplay')) {
-        const noDisplay = keyFile.get_boolean(group, 'NoDisplay');
-        if (noDisplay) return null;
+        try {
+          if (keyFile.get_boolean(group, 'NoDisplay')) return null;
+        } catch (e) {}
       }
 
-      const name = keyFile.get_string(group, 'Name');
+      // Get localized name and comment
+      let name = '';
+      try {
+        name = keyFile.get_locale_string(group, 'Name', null);
+      } catch (e) {
+        try { name = keyFile.get_string(group, 'Name'); } catch (e2) { return null; }
+      }
+
       const fileName = GLib.path_get_basename(filePath);
       const appId = fileName.replace('.desktop', '');
 
       let description = '';
-      if (keyFile.has_key(group, 'Comment')) {
-        description = keyFile.get_string(group, 'Comment');
+      try {
+        description = keyFile.get_locale_string(group, 'Comment', null);
+      } catch (e) {
+        try { description = keyFile.get_string(group, 'Comment'); } catch (e2) {}
       }
 
       let icon = '';
       if (keyFile.has_key(group, 'Icon')) {
-        icon = keyFile.get_string(group, 'Icon');
+        try { icon = keyFile.get_string(group, 'Icon'); } catch (e) {}
       }
 
       let exec = '';
       if (keyFile.has_key(group, 'Exec')) {
-        exec = keyFile.get_string(group, 'Exec');
+        try { exec = keyFile.get_string(group, 'Exec'); } catch (e) {}
       }
 
       return {
@@ -660,7 +700,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
         hidden: false
       };
     } catch (error) {
-      log(`[TriggerMoveWindows] Error parsing desktop file ${filePath}: ${error.message}`);
+      // Don't spam logs for every parsing failure
       return null;
     }
   }
