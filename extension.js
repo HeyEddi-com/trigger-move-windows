@@ -1,19 +1,28 @@
 'use strict';
 
 import Gio from 'gi://Gio';
-import Gtk from 'gi://Gtk';
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as ShellConfig from 'resource:///org/gnome/shell/misc/config.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const ME = 'trigger-move-windows@eddi.local';
+
+/** @type {number} Parsed major from {@link ShellConfig.PACKAGE_VERSION} (e.g. 45 … 50). */
+const SHELL_MAJOR = (() => {
+  const v = ShellConfig.PACKAGE_VERSION || '0';
+  const m = parseInt(String(v).split('.')[0], 10);
+  return Number.isFinite(m) ? m : 0;
+})();
 
 export default class TriggerMoveWindows extends Extension {
   constructor(metadata) {
     super(metadata);
     this._settings = null;
     this._appShortcuts = new Map(); // Track registered app shortcuts
+    this._triggerShortcutChangedId = null;
   }
 
   enable() {
@@ -26,18 +35,25 @@ export default class TriggerMoveWindows extends Extension {
         throw new Error('Failed to initialize settings');
       }
       log(`[${ME}] Settings initialized successfully`);
+      log(`[${ME}] GNOME Shell ${ShellConfig.PACKAGE_VERSION} (parsed major ${SHELL_MAJOR})`);
 
-      // Add keybindings
-      this._addKeybindings();
-
-      // Add individual app shortcuts
+      // Per-app shortcuts first so the global trigger is registered last and wins if the
+      // same accelerator was accidentally assigned to an app.
       this._registerAppShortcuts();
+
+      this._syncMainKeybinding();
+
+      this._triggerShortcutChangedId = this._settings.connect('changed::trigger-shortcut', () => {
+        log(`[${ME}] trigger-shortcut setting changed, re-syncing main keybinding`);
+        this._syncMainKeybinding();
+      });
 
       // Monitor settings changes to refresh shortcuts
       this._settingsChangedId = this._settings.connect('changed::app-configs', () => {
         log(`[${ME}] App configs changed, refreshing shortcuts...`);
         this._removeAppShortcuts();
         this._registerAppShortcuts();
+        this._syncMainKeybinding();
       });
 
       Main.notify('Trigger Move Windows', 'Version 2.0 (Pool + Schema Fix) Loaded');
@@ -53,18 +69,25 @@ export default class TriggerMoveWindows extends Extension {
     log(`[${ME}] Disabling extension...`);
 
     try {
+      // Remove all app-specific shortcuts first
+      this._removeAppShortcuts();
+
+      if (this._settings) {
+        if (this._triggerShortcutChangedId) {
+          this._settings.disconnect(this._triggerShortcutChangedId);
+          this._triggerShortcutChangedId = null;
+        }
+
+        // Disconnect settings monitoring
+        if (this._settingsChangedId) {
+          this._settings.disconnect(this._settingsChangedId);
+          this._settingsChangedId = null;
+        }
+      }
+
       // Remove main keybinding
       Main.wm.removeKeybinding('trigger-shortcut');
       log(`[${ME}] Main keybinding removed`);
-
-      // Remove all app-specific shortcuts
-      this._removeAppShortcuts();
-
-      // Disconnect settings monitoring
-      if (this._settingsChangedId) {
-        this._settings.disconnect(this._settingsChangedId);
-        this._settingsChangedId = null;
-      }
 
       // Clean up settings
       this._settings = null;
@@ -109,17 +132,79 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
-  _addKeybindings() {
+  /**
+   * Structural check for GTK-style accelerator strings (same shape Mutter reads from
+   * GSettings). No Gtk in the shell process: optional <Modifier> tokens, then a key
+   * token without angle brackets. Catches values like `<Super><Shift>m>` that would
+   * otherwise yield no combo and never fire.
+   */
+  _isValidTriggerAccelerator(accel) {
+    if (typeof accel !== 'string' || accel.trim() === '' || accel === 'disabled')
+      return false;
+    const s = accel.trim();
+    return /^(?:<[^>]+>)*[^<>]+$/.test(s);
+  }
+
+  /** Keybinding modes for the global organizer shortcut (45–50). */
+  _mainKeybindingActionModes() {
+    if (Shell.ActionMode.ALL !== undefined)
+      return Shell.ActionMode.ALL;
+    let modes = Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW;
+    if (Shell.ActionMode.POPUP !== undefined)
+      modes |= Shell.ActionMode.POPUP;
+    return modes;
+  }
+
+  /** Keybinding modes for per-app shortcuts (45–50). */
+  _appKeybindingActionModes() {
+    let modes = Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW;
+    if (Shell.ActionMode.POPUP !== undefined)
+      modes |= Shell.ActionMode.POPUP;
+    return modes;
+  }
+
+  _getWindowActors() {
     try {
-      log(`[${ME}] Adding keybinding...`);
+      if (typeof global.get_window_actors === 'function')
+        return global.get_window_actors();
+    } catch (e) {
+      logError(`[${ME}] global.get_window_actors failed:`, e);
+    }
+    try {
+      const comp = global.compositor;
+      if (comp && typeof comp.get_window_actors === 'function')
+        return comp.get_window_actors();
+    } catch (e) {
+      logError(`[${ME}] compositor.get_window_actors failed:`, e);
+    }
+    return [];
+  }
+
+  /**
+   * Remove and re-add the main keybinding so reload / prefs updates cannot leave a stale
+   * registration (Mutter rejects re-add without remove). Uses ALL action modes so the
+   * shortcut is not blocked in uncommon Shell modes.
+   */
+  _syncMainKeybinding() {
+    try {
+      log(`[${ME}] Syncing main keybinding...`);
+
+      try {
+        Main.wm.removeKeybinding('trigger-shortcut');
+      } catch (e) {
+        logError(`[${ME}] removeKeybinding(trigger-shortcut) ignored:`, e);
+      }
 
       // Check current shortcut setting
       let currentShortcut = this._settings.get_strv('trigger-shortcut');
       log(`[${ME}] Current shortcut setting: ${JSON.stringify(currentShortcut)}`);
 
-      // Always ensure we have a valid shortcut
-      if (!currentShortcut || currentShortcut.length === 0 || currentShortcut[0] === '') {
-        log(`[${ME}] No valid shortcut configured, setting default: <Super><Shift>m`);
+      const accel =
+        currentShortcut && currentShortcut.length > 0 ? currentShortcut[0] : '';
+
+      // Ensure a non-empty, structurally valid shortcut (fixes bad values from prefs or manual dconf edits)
+      if (!this._isValidTriggerAccelerator(accel)) {
+        log(`[${ME}] Invalid or empty trigger shortcut (${JSON.stringify(accel)}), setting default: <Super><Shift>m`);
         const defaultShortcut = ['<Super><Shift>m'];
         this._settings.set_strv('trigger-shortcut', defaultShortcut);
         currentShortcut = defaultShortcut;
@@ -128,24 +213,27 @@ export default class TriggerMoveWindows extends Extension {
         log(`[${ME}] Using configured shortcut: ${JSON.stringify(currentShortcut)}`);
       }
 
-      // Register the keybinding
-      Main.wm.addKeybinding(
+      const bindingAction = Main.wm.addKeybinding(
         'trigger-shortcut',
         this._settings,
         Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-        Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+        this._mainKeybindingActionModes(),
         () => {
           log(`[${ME}] *** KEYBOARD SHORTCUT PRESSED! ***`);
           this._onShortcutTriggered();
         }
       );
 
-      // Verify final shortcut setting
+      if (!bindingAction) {
+        logError(`[${ME}] addKeybinding returned NONE — main shortcut is not active (name collision or registration failure)`);
+      } else {
+        log(`[${ME}] Main keybinding action id: ${bindingAction}`);
+      }
+
       const finalShortcut = this._settings.get_strv('trigger-shortcut');
-      log(`[${ME}] Keybinding registered successfully with: ${JSON.stringify(finalShortcut)}`);
-      log(`[${ME}] Press ${finalShortcut[0]} to trigger window organization`);
+      log(`[${ME}] Keybinding registered with: ${JSON.stringify(finalShortcut)} — press ${finalShortcut[0]} to organize windows`);
     } catch (error) {
-      logError(`[${ME}] Failed to add keybinding:`, error);
+      logError(`[${ME}] Failed to sync main keybinding:`, error);
       throw error;
     }
   }
@@ -189,7 +277,7 @@ export default class TriggerMoveWindows extends Extension {
       const appSystem = Shell.AppSystem.get_default();
 
       // Get all windows using proper GNOME APIs
-      const windows = global.get_window_actors()
+      const windows = this._getWindowActors()
         .map(actor => actor.get_meta_window())
         .filter(window => window && window.get_window_type() === Meta.WindowType.NORMAL);
 
@@ -313,11 +401,14 @@ export default class TriggerMoveWindows extends Extension {
 
   _getProcessName(pid) {
     try {
-      const GLib = imports.gi.GLib;
       const [success, contents] = GLib.file_get_contents(`/proc/${pid}/comm`);
-      if (success) {
+      if (!success || !contents)
+        return '';
+      if (contents instanceof Uint8Array)
+        return new TextDecoder().decode(contents).trim();
+      if (typeof imports !== 'undefined' && imports.byteArray)
         return imports.byteArray.toString(contents).trim();
-      }
+      return String(contents).trim();
     } catch (error) {
       log(`[${ME}] Error reading process name for PID ${pid}: ${error.message}`);
     }
@@ -390,7 +481,7 @@ export default class TriggerMoveWindows extends Extension {
 
       // List all windows with their app associations
       log(`[${ME}] Window to App associations:`);
-      const windows = global.get_window_actors()
+      const windows = this._getWindowActors()
         .map(actor => actor.get_meta_window())
         .filter(window => window && window.get_window_type() === Meta.WindowType.NORMAL);
 
@@ -454,8 +545,7 @@ export default class TriggerMoveWindows extends Extension {
       const workspaceManager = global.workspace_manager;
 
       // Ensure target workspace exists
-      const numWorkspaces = workspaceManager.get_n_workspaces();
-      while (numWorkspaces < targetWorkspaceIndex) {
+      while (workspaceManager.get_n_workspaces() < targetWorkspaceIndex) {
         workspaceManager.append_new_workspace(false, global.get_current_time());
         log(`[${ME}] Created new workspace ${workspaceManager.get_n_workspaces()}`);
       }
@@ -530,7 +620,7 @@ export default class TriggerMoveWindows extends Extension {
               schemaKey,
               this._settings,
               Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-              Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+              this._appKeybindingActionModes(),
               () => {
                 log(`[${ME}] *** APP SHORTCUT TRIGGERED: ${appId} ***`);
                 this._activateApp(appId);
@@ -586,7 +676,7 @@ export default class TriggerMoveWindows extends Extension {
 
       // Find running windows for this app
       const windowTracker = Shell.WindowTracker.get_default();
-      const windows = global.get_window_actors()
+      const windows = this._getWindowActors()
         .map(actor => actor.get_meta_window())
         .filter(window => window && window.get_window_type() === Meta.WindowType.NORMAL);
 
@@ -743,6 +833,20 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
+  /**
+   * `Shell.AppLaunchGpu` exists from GNOME 48 onward; older Shells use the third launch
+   * flag as 0 (no GPU preference).
+   */
+  _launchAppPreferred(app) {
+    const timestamp = global.get_current_time();
+    const workspace = -1;
+    const gpuPref = Shell.AppLaunchGpu?.APP_PREF;
+    if (gpuPref !== undefined)
+      app.launch(timestamp, workspace, gpuPref);
+    else
+      app.launch(timestamp, workspace, 0);
+  }
+
   _launchApp(appId, displayName) {
     try {
       log(`[${ME}] Attempting to launch app: ${appId} (DisplayName: ${displayName})`);
@@ -783,7 +887,7 @@ export default class TriggerMoveWindows extends Extension {
 
       if (app) {
         log(`[${ME}] Launching app: ${app.get_id()} (${app.get_name()})`);
-        app.launch(0, -1, Shell.AppLaunchGpu.APP_PREF);
+        this._launchAppPreferred(app);
         this._showNotification('Application Launched', `Started ${app.get_name() || displayName}`, 'app-launch');
       } else {
         // Try launching via command line as absolute fallback

@@ -1258,7 +1258,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     });
 
     // Get current global shortcut
-    const currentShortcut = settings.get_strv('trigger-shortcut')[0] || '<Super><Shift>m>';
+    const currentShortcut = settings.get_strv('trigger-shortcut')[0] || '<Super><Shift>m';
 
     const shortcutButton = new Gtk.Button({
       label: this._getShortcutLabel([currentShortcut]),
@@ -1297,7 +1297,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
   _updateAppShortcut(settings, appId, shortcut) {
     log(`[TriggerMoveWindows] Shortcut for ${appId}: ${shortcut}`);
-    const configs = this._parseAppConfigs(settings); ``
+    const configs = this._parseAppConfigs(settings);
     const currentConfig = configs[appId] || { name: appId, workspace: 1 };
     currentConfig.shortcut = shortcut;
     this._updateAppConfig(settings, appId, currentConfig);
