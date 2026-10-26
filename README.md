@@ -24,7 +24,7 @@ Automatically organize application windows across workspaces with a single keybo
 ### Method 2: Manual Installation from Release
 
 1. **Download the latest release**:
-   - Visit the [GitHub Releases page](https://github.com/eddimon/trigger-move-windows/releases)
+   - Visit the [GitHub Releases page](https://github.com/HeyEddi-com/trigger-move-windows/releases)
    - Download `trigger-move-windows@eddi.local.shell-extension.zip`
 
 2. **Install via Extensions app**:
@@ -43,7 +43,7 @@ Automatically organize application windows across workspaces with a single keybo
 
 1. **Clone or download this extension**:
    ```bash
-   git clone https://github.com/eddimon/trigger-move-windows.git ~/.local/share/gnome-shell/extensions/trigger-move-windows@eddi.local
+   git clone https://github.com/HeyEddi-com/trigger-move-windows.git ~/.local/share/gnome-shell/extensions/trigger-move-windows@eddi.local
    ```
 
 2. **Compile GSettings schema**:
@@ -275,6 +275,21 @@ dbus-send --session --type=method_call --dest=org.gnome.Shell /org/gnome/Shell o
 - **Ubuntu**: 22.04+ with GNOME Shell 45+
 - **Fedora**: 38+ with GNOME Shell 45+
 - **Pop!_OS**: 22.04+ with COSMIC/GNOME Shell
+
+## Releasing
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`. That workflow runs the smoke and unit tests, builds `dist/trigger-move-windows@eddi.local.zip`, attaches it to a GitHub Release, and submits the same zip to [extensions.gnome.org](https://extensions.gnome.org) when these repository secrets are set:
+
+- `GNOME_USERNAME` — your extensions.gnome.org login
+- `GNOME_PASSWORD` — that account's password
+
+The upload asserts the [GNOME Extensions Developer Agreement](https://extensions.gnome.org/about/): the extension stays under a GNOME-Shell-compatible license (this project is GPL-2.0-or-later), and GNOME may reassign the maintainer. A successful upload lands in the review queue. It is not public until a reviewer approves it.
+
+You can also run the workflow by hand from the Actions tab (`workflow_dispatch`) after the secrets exist. Locally:
+
+```bash
+GNOME_USERNAME=you GNOME_PASSWORD=secret ./scripts/publish-ego.sh dist/trigger-move-windows@eddi.local.zip
+```
 
 ## 📄 License
 

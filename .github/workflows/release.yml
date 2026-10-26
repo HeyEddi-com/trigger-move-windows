@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install schema compiler
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-bin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test
+        run: make test-smoke test-unit
+
+      - name: Package
+        run: make package
+
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/trigger-move-windows@eddi.local.zip \
+            --title "$GITHUB_REF_NAME" \
+            --notes "GNOME Shell extension build from ${GITHUB_SHA}."
+
+      - name: Upload to extensions.gnome.org
+        env:
+          GNOME_USERNAME: ${{ secrets.GNOME_USERNAME }}
+          GNOME_PASSWORD: ${{ secrets.GNOME_PASSWORD }}
+        run: |
+          if [ -z "$GNOME_USERNAME" ] || [ -z "$GNOME_PASSWORD" ]; then
+            echo "Skipping extensions.gnome.org: add GNOME_USERNAME and GNOME_PASSWORD repository secrets, then re-run."
+            exit 0
+          fi
+          ./scripts/publish-ego.sh dist/trigger-move-windows@eddi.local.zip
