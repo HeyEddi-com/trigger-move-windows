@@ -264,7 +264,7 @@ dbus-send --session --type=method_call --dest=org.gnome.Shell /org/gnome/Shell o
 
 ## 📋 System Requirements
 
-- **GNOME Shell**: 45, 46, 47, 48, 49, or 50
+- **GNOME Shell**: 45 through 51
 - **Linux Distribution**: Any with modern GNOME
 - **Session Types**: Both X11 and Wayland supported
 - **Architecture**: x86_64, ARM64

@@ -1,16 +1,16 @@
 'use strict';
 
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ShellConfig from 'resource:///org/gnome/shell/misc/config.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
+import { isValidTriggerAccelerator } from './lib/accelerator-validate.js';
 
 const ME = 'trigger-move-windows@eddi.local';
 
-/** @type {number} Parsed major from {@link ShellConfig.PACKAGE_VERSION} (e.g. 45 … 50). */
+/** @type {number} Parsed major from {@link ShellConfig.PACKAGE_VERSION} (e.g. 45 … 51). */
 const SHELL_MAJOR = (() => {
   const v = ShellConfig.PACKAGE_VERSION || '0';
   const m = parseInt(String(v).split('.')[0], 10);
@@ -56,8 +56,7 @@ export default class TriggerMoveWindows extends Extension {
         this._syncMainKeybinding();
       });
 
-      Main.notify('Trigger Move Windows', 'Version 2.0 (Pool + Schema Fix) Loaded');
-      log(`[${ME}] Extension enabled successfully (V2)`);
+      log(`[${ME}] Extension enabled successfully`);
 
     } catch (error) {
       logError(`[${ME}] Error during enable:`, error);
@@ -133,19 +132,13 @@ export default class TriggerMoveWindows extends Extension {
   }
 
   /**
-   * Structural check for GTK-style accelerator strings (same shape Mutter reads from
-   * GSettings). No Gtk in the shell process: optional <Modifier> tokens, then a key
-   * token without angle brackets. Catches values like `<Super><Shift>m>` that would
-   * otherwise yield no combo and never fire.
+   * Structural check for GTK-style accelerator strings (shared helper in lib/).
    */
   _isValidTriggerAccelerator(accel) {
-    if (typeof accel !== 'string' || accel.trim() === '' || accel === 'disabled')
-      return false;
-    const s = accel.trim();
-    return /^(?:<[^>]+>)*[^<>]+$/.test(s);
+    return isValidTriggerAccelerator(accel);
   }
 
-  /** Keybinding modes for the global organizer shortcut (45–50). */
+  /** Keybinding modes for the global organizer shortcut (45–51). */
   _mainKeybindingActionModes() {
     if (Shell.ActionMode.ALL !== undefined)
       return Shell.ActionMode.ALL;
@@ -155,7 +148,7 @@ export default class TriggerMoveWindows extends Extension {
     return modes;
   }
 
-  /** Keybinding modes for per-app shortcuts (45–50). */
+  /** Keybinding modes for per-app shortcuts (45–51). */
   _appKeybindingActionModes() {
     let modes = Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW;
     if (Shell.ActionMode.POPUP !== undefined)
@@ -220,7 +213,10 @@ export default class TriggerMoveWindows extends Extension {
         this._mainKeybindingActionModes(),
         () => {
           log(`[${ME}] *** KEYBOARD SHORTCUT PRESSED! ***`);
-          this._onShortcutTriggered();
+          this._onShortcutTriggered().catch(err => {
+            logError(`[${ME}] Shortcut handler promise rejected:`, err);
+            this._showNotification('Error', `Failed to organize windows: ${err.message}`, 'error');
+          });
         }
       );
 
@@ -238,7 +234,7 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
-  _onShortcutTriggered() {
+  async _onShortcutTriggered() {
     log(`[${ME}] *** SHORTCUT HANDLER CALLED! ***`);
 
     try {
@@ -249,7 +245,7 @@ export default class TriggerMoveWindows extends Extension {
       this._debugGnomeAPIs();
 
       // Execute window management logic
-      this._organizeWindows();
+      await this._organizeWindows();
 
       log(`[${ME}] Shortcut handler completed successfully`);
 
@@ -259,7 +255,7 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
-  _organizeWindows() {
+  async _organizeWindows() {
     log(`[${ME}] Starting window organization...`);
 
     try {
@@ -287,8 +283,8 @@ export default class TriggerMoveWindows extends Extension {
       const processedApps = new Set();
 
       // Process each window with enhanced GNOME APIs
-      windows.forEach(metaWindow => {
-        const windowInfo = this._getEnhancedWindowInfo(metaWindow, windowTracker);
+      for (const metaWindow of windows) {
+        const windowInfo = await this._getEnhancedWindowInfo(metaWindow, windowTracker);
         log(`[${ME}] Processing window: ${windowInfo.title} (App: ${windowInfo.appId}, WM_CLASS: ${windowInfo.wmClass})`);
 
         // Find matching app configuration
@@ -306,7 +302,7 @@ export default class TriggerMoveWindows extends Extension {
         } else {
           log(`[${ME}] No configuration found for ${windowInfo.appId || windowInfo.wmClass}`);
         }
-      });
+      }
 
       // Show completion notification
       if (movedCount > 0) {
@@ -343,7 +339,7 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
-  _getEnhancedWindowInfo(metaWindow, windowTracker) {
+  async _getEnhancedWindowInfo(metaWindow, windowTracker) {
     const windowInfo = {
       title: metaWindow.get_title() || '',
       wmClass: metaWindow.get_wm_class() || '',
@@ -365,12 +361,11 @@ export default class TriggerMoveWindows extends Extension {
       log(`[${ME}] Could not get app info from WindowTracker: ${error.message}`);
     }
 
-    // Get process name as fallback
+    // Get process name as fallback (async: avoid blocking the Shell main loop)
     try {
       const pid = metaWindow.get_pid();
-      if (pid > 0) {
-        windowInfo.process = this._getProcessName(pid);
-      }
+      if (pid > 0)
+        windowInfo.process = await this._getProcessNameAsync(pid);
     } catch (error) {
       log(`[${ME}] Could not get process info: ${error.message}`);
     }
@@ -378,7 +373,7 @@ export default class TriggerMoveWindows extends Extension {
     return windowInfo;
   }
 
-  _getWindowInfo(metaWindow) {
+  async _getWindowInfo(metaWindow) {
     const windowInfo = {
       title: metaWindow.get_title() || '',
       wmClass: metaWindow.get_wm_class() || '',
@@ -386,12 +381,10 @@ export default class TriggerMoveWindows extends Extension {
       currentWorkspace: metaWindow.get_workspace()?.index() || 0
     };
 
-    // Get process name
     try {
       const pid = metaWindow.get_pid();
-      if (pid > 0) {
-        windowInfo.process = this._getProcessName(pid);
-      }
+      if (pid > 0)
+        windowInfo.process = await this._getProcessNameAsync(pid);
     } catch (error) {
       log(`[${ME}] Could not get process info: ${error.message}`);
     }
@@ -399,20 +392,40 @@ export default class TriggerMoveWindows extends Extension {
     return windowInfo;
   }
 
-  _getProcessName(pid) {
-    try {
-      const [success, contents] = GLib.file_get_contents(`/proc/${pid}/comm`);
-      if (!success || !contents)
-        return '';
-      if (contents instanceof Uint8Array)
-        return new TextDecoder().decode(contents).trim();
-      if (typeof imports !== 'undefined' && imports.byteArray)
-        return imports.byteArray.toString(contents).trim();
-      return String(contents).trim();
-    } catch (error) {
-      log(`[${ME}] Error reading process name for PID ${pid}: ${error.message}`);
-    }
-    return '';
+  /**
+   * Async read of /proc/[pid]/comm so the Shell thread never does synchronous file IO
+   * (EGO-X-004; see gjs.guide guides/gio/file-operations).
+   */
+  _getProcessNameAsync(pid) {
+    return new Promise(resolve => {
+      if (pid <= 0) {
+        resolve('');
+        return;
+      }
+
+      const path = `/proc/${pid}/comm`;
+      const file = Gio.File.new_for_path(path);
+
+      file.load_contents_async(null, (f, res) => {
+        try {
+          const [ok, contents] = f.load_contents_finish(res);
+          if (!ok || !contents) {
+            resolve('');
+            return;
+          }
+          const bytes = typeof contents.get_data === 'function' ? contents.get_data() : contents;
+          if (bytes instanceof Uint8Array)
+            resolve(new TextDecoder().decode(bytes).trim());
+          else if (typeof imports !== 'undefined' && imports.byteArray)
+            resolve(imports.byteArray.toString(bytes).trim());
+          else
+            resolve(String(bytes).trim());
+        } catch (error) {
+          log(`[${ME}] Error reading process name for PID ${pid}: ${error.message}`);
+          resolve('');
+        }
+      });
+    });
   }
 
   _findMatchingAppEnhanced(windowInfo, configuredApps) {
@@ -623,7 +636,9 @@ export default class TriggerMoveWindows extends Extension {
               this._appKeybindingActionModes(),
               () => {
                 log(`[${ME}] *** APP SHORTCUT TRIGGERED: ${appId} ***`);
-                this._activateApp(appId);
+                this._activateApp(appId).catch(err => {
+                  logError(`[${ME}] App shortcut handler rejected:`, err);
+                });
               }
             );
 
@@ -665,7 +680,7 @@ export default class TriggerMoveWindows extends Extension {
     }
   }
 
-  _activateApp(appId) {
+  async _activateApp(appId) {
     try {
       log(`[${ME}] Activating app: ${appId}`);
 
@@ -682,14 +697,13 @@ export default class TriggerMoveWindows extends Extension {
 
       const matchingWindows = [];
 
-      windows.forEach(metaWindow => {
-        const windowInfo = this._getEnhancedWindowInfo(metaWindow, windowTracker);
+      for (const metaWindow of windows) {
+        const windowInfo = await this._getEnhancedWindowInfo(metaWindow, windowTracker);
 
         // Use same matching logic as window organization
-        if (this._appMatches(windowInfo, appConfig, appId)) {
+        if (this._appMatches(windowInfo, appConfig, appId))
           matchingWindows.push(metaWindow);
-        }
-      });
+      }
 
       if (matchingWindows.length > 0) {
         // Focus the most recent window

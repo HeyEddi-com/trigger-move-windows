@@ -1,0 +1,10 @@
+{
+  "name": "trigger-move-windows-extension",
+  "private": true,
+  "type": "module",
+  "description": "Local tooling only (unit tests). The GNOME extension itself is not an npm package.",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.js",
+    "test:smoke": "sh tests/smoke/blackbox.sh"
+  }
+}

@@ -10,7 +10,7 @@ EXTENSION_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(EXTENSION_NAME)
 SCHEMA_DIR = $(EXTENSION_DIR)/schemas
 SCHEMA_FILE = org.gnome.shell.extensions.trigger-move-windows.gschema.xml
 
-# Files to install
+# Files to install (flat); lib/ is copied as a directory (see install/package).
 EXTENSION_FILES = \
 	extension.js \
 	prefs.js \
@@ -21,7 +21,7 @@ EXTENSION_FILES = \
 SCHEMA_FILES = \
 	schemas/$(SCHEMA_FILE)
 
-.PHONY: all install uninstall enable disable restart-shell compile-schemas clean help
+.PHONY: all install uninstall enable disable restart-shell compile-schemas clean help test test-unit test-smoke test-ego test-gjs package
 
 all: help
 
@@ -38,7 +38,11 @@ help:
 	@echo "  clean          Clean build artifacts"
 	@echo "  package        Create installable package"
 	@echo "  dev-install    Install for development (with symlinks)"
-	@echo "  test           Run basic tests"
+	@echo "  test           Run smoke + unit tests (Node) + legacy gjs tests"
+	@echo "  test-smoke     Full smoke (files, schema, greps + EGO-style review via blackbox.sh)"
+	@echo "  test-ego       extensions.gnome.org mechanical checks only (ego-gnome-review.sh)"
+	@echo "  test-unit      Node unit tests (accelerator validate, etc.)"
+	@echo "  test-gjs       Legacy gjs tests (Gtk/Gdk; needs GI typelibs)"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make install && make enable    # Install and enable extension"
@@ -49,6 +53,7 @@ install: compile-schemas
 	@mkdir -p $(EXTENSION_DIR)
 	@mkdir -p $(SCHEMA_DIR)
 	@cp -r $(EXTENSION_FILES) $(EXTENSION_DIR)/
+	@cp -r lib $(EXTENSION_DIR)/lib
 	@cp -r schemas/* $(SCHEMA_DIR)/
 	@echo "Extension installed to: $(EXTENSION_DIR)"
 	@echo "Run 'make enable' to enable the extension"
@@ -61,6 +66,7 @@ dev-install:
 	@ln -sf $(PWD)/metadata.json $(EXTENSION_DIR)/
 	@ln -sf $(PWD)/stylesheet.css $(EXTENSION_DIR)/
 	@ln -sf $(PWD)/README.md $(EXTENSION_DIR)/
+	@ln -sfn $(PWD)/lib $(EXTENSION_DIR)/lib
 	@mkdir -p $(SCHEMA_DIR)
 	@ln -sf $(PWD)/schemas/$(SCHEMA_FILE) $(SCHEMA_DIR)/
 	@$(MAKE) compile-schemas
@@ -98,11 +104,13 @@ compile-schemas:
 package: clean
 	@echo "Creating installation package (zip)..."
 	@mkdir -p dist
-	@zip -jr dist/$(EXTENSION_NAME).zip $(EXTENSION_FILES)
-	@mkdir -p dist/schemas
-	@cp schemas/$(SCHEMA_FILE) dist/schemas/
-	@cd dist && zip -r $(EXTENSION_NAME).zip schemas/$(SCHEMA_FILE)
-	@rm -rf dist/schemas
+	@python3 -c 'import zipfile; from pathlib import Path; \
+root = Path("."); out = root / "dist" / "$(EXTENSION_NAME).zip"; \
+files = [*(f.strip() for f in "$(EXTENSION_FILES)".split()), \
+"lib/accelerator-validate.js", "schemas/$(SCHEMA_FILE)"]; \
+zf = zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED); \
+[zf.write(root / f, f) for f in files if (root / f).is_file()]; \
+zf.close(); print(out)'
 	@echo "Package created: dist/$(EXTENSION_NAME).zip"
 clean:
 	@echo "Cleaning build artifacts..."
@@ -110,8 +118,34 @@ clean:
 	@rm -f schemas/*.compiled
 	@echo "Clean complete"
 
-test:
-	@echo "Running basic tests..."
+test: test-smoke test-unit test-gjs
+	@echo "Full test suite finished."
+
+test-smoke:
+	@sh tests/smoke/blackbox.sh
+
+test-ego:
+	@sh tests/smoke/ego-gnome-review.sh
+
+test-unit:
+	@node --test tests/unit/*.test.js
+
+test-gjs:
+	@echo "Running legacy gjs tests (requires Gtk/Gdk GI typelibs)..."
+	@for t in test-shortcut-conflicts.js test-recording-state.js; do \
+		if [ -f "$$t" ]; then \
+			echo "gjs $$t"; \
+			gjs "$$t" || exit 1; \
+		fi; \
+	done
+	@if [ -f test-shortcut-utils.js ]; then \
+		echo "gjs test-shortcut-utils.js"; \
+		gjs test-shortcut-utils.js || exit 1; \
+	fi
+	@echo "gjs tests passed."
+
+# Quick file/schema check without Node (subset of test-smoke)
+test-legacy-files:
 	@echo "Checking extension files..."
 	@for file in $(EXTENSION_FILES); do \
 		if [ ! -f "$$file" ]; then \
@@ -120,15 +154,11 @@ test:
 		fi; \
 		echo "✓ $$file"; \
 	done
+	@test -d lib && echo "✓ lib/" || (echo "ERROR: missing lib/" && exit 1)
 	@echo "Checking schema file..."
-	@if [ ! -f "schemas/$(SCHEMA_FILE)" ]; then \
-		echo "ERROR: Missing schema file"; \
-		exit 1; \
-	fi
+	@test -f "schemas/$(SCHEMA_FILE)" || (echo "ERROR: Missing schema file" && exit 1)
 	@echo "✓ Schema file found"
-	@echo "Validating metadata.json..."
 	@python3 -m json.tool metadata.json > /dev/null && echo "✓ Valid JSON" || (echo "ERROR: Invalid JSON" && exit 1)
-	@echo "All tests passed!"
 
 status:
 	@echo "Extension Status:"
@@ -159,6 +189,7 @@ system-install: compile-schemas
 	@echo "Installing system-wide (requires sudo)..."
 	@sudo mkdir -p /usr/share/gnome-shell/extensions/$(EXTENSION_NAME)
 	@sudo cp -r $(EXTENSION_FILES) /usr/share/gnome-shell/extensions/$(EXTENSION_NAME)/
+	@sudo cp -r lib /usr/share/gnome-shell/extensions/$(EXTENSION_NAME)/lib
 	@sudo mkdir -p /usr/share/gnome-shell/extensions/$(EXTENSION_NAME)/schemas
 	@sudo cp -r schemas/* /usr/share/gnome-shell/extensions/$(EXTENSION_NAME)/schemas/
 	@sudo glib-compile-schemas /usr/share/gnome-shell/extensions/$(EXTENSION_NAME)/schemas/
