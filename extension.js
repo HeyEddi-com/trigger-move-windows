@@ -26,7 +26,7 @@ export default class TriggerMoveWindows extends Extension {
   }
 
   enable() {
-    log(`[${ME}] Enabling extension...`);
+    console.debug(`[${ME}] Enabling extension...`);
 
     try {
       // Initialize settings
@@ -34,8 +34,8 @@ export default class TriggerMoveWindows extends Extension {
       if (!this._settings) {
         throw new Error('Failed to initialize settings');
       }
-      log(`[${ME}] Settings initialized successfully`);
-      log(`[${ME}] GNOME Shell ${ShellConfig.PACKAGE_VERSION} (parsed major ${SHELL_MAJOR})`);
+      console.debug(`[${ME}] Settings initialized successfully`);
+      console.debug(`[${ME}] GNOME Shell ${ShellConfig.PACKAGE_VERSION} (parsed major ${SHELL_MAJOR})`);
 
       // Per-app shortcuts first so the global trigger is registered last and wins if the
       // same accelerator was accidentally assigned to an app.
@@ -44,57 +44,50 @@ export default class TriggerMoveWindows extends Extension {
       this._syncMainKeybinding();
 
       this._triggerShortcutChangedId = this._settings.connect('changed::trigger-shortcut', () => {
-        log(`[${ME}] trigger-shortcut setting changed, re-syncing main keybinding`);
+        console.debug(`[${ME}] trigger-shortcut setting changed, re-syncing main keybinding`);
         this._syncMainKeybinding();
       });
 
       // Monitor settings changes to refresh shortcuts
       this._settingsChangedId = this._settings.connect('changed::app-configs', () => {
-        log(`[${ME}] App configs changed, refreshing shortcuts...`);
+        console.debug(`[${ME}] App configs changed, refreshing shortcuts...`);
         this._removeAppShortcuts();
         this._registerAppShortcuts();
         this._syncMainKeybinding();
       });
 
-      log(`[${ME}] Extension enabled successfully`);
+      console.debug(`[${ME}] Extension enabled successfully`);
 
     } catch (error) {
-      logError(`[${ME}] Error during enable:`, error);
+      console.error(error, `[${ME}] Error during enable:`);
       this._showNotification('Extension Error', `Failed to enable: ${error.message}`, 'error');
     }
   }
 
   disable() {
-    log(`[${ME}] Disabling extension...`);
+    console.debug(`[${ME}] Disabling extension...`);
 
-    try {
-      // Remove all app-specific shortcuts first
-      this._removeAppShortcuts();
+    // Remove all app-specific shortcuts first
+    this._removeAppShortcuts();
 
-      if (this._settings) {
-        if (this._triggerShortcutChangedId) {
-          this._settings.disconnect(this._triggerShortcutChangedId);
-          this._triggerShortcutChangedId = null;
-        }
-
-        // Disconnect settings monitoring
-        if (this._settingsChangedId) {
-          this._settings.disconnect(this._settingsChangedId);
-          this._settingsChangedId = null;
-        }
+    if (this._settings) {
+      if (this._triggerShortcutChangedId) {
+        this._settings.disconnect(this._triggerShortcutChangedId);
+        this._triggerShortcutChangedId = null;
       }
 
-      // Remove main keybinding
-      Main.wm.removeKeybinding('trigger-shortcut');
-      log(`[${ME}] Main keybinding removed`);
-
-      // Clean up settings
-      this._settings = null;
-
-      log(`[${ME}] Extension disabled successfully`);
-    } catch (error) {
-      logError(`[${ME}] Error during disable:`, error);
+      if (this._settingsChangedId) {
+        this._settings.disconnect(this._settingsChangedId);
+        this._settingsChangedId = null;
+      }
     }
+
+    Main.wm.removeKeybinding('trigger-shortcut');
+    console.debug(`[${ME}] Main keybinding removed`);
+
+    this._settings = null;
+
+    console.debug(`[${ME}] Extension disabled successfully`);
   }
 
   // Helper method to show notifications based on settings
@@ -125,9 +118,9 @@ export default class TriggerMoveWindows extends Extension {
 
     if (shouldShow) {
       Main.notify(title, message);
-      log(`[${ME}] Notification shown: ${title} - ${message}`);
+      console.debug(`[${ME}] Notification shown: ${title} - ${message}`);
     } else {
-      log(`[${ME}] Notification suppressed (${notificationType}): ${title} - ${message}`);
+      console.debug(`[${ME}] Notification suppressed (${notificationType}): ${title} - ${message}`);
     }
   }
 
@@ -161,14 +154,14 @@ export default class TriggerMoveWindows extends Extension {
       if (typeof global.get_window_actors === 'function')
         return global.get_window_actors();
     } catch (e) {
-      logError(`[${ME}] global.get_window_actors failed:`, e);
+      console.error(e, `[${ME}] global.get_window_actors failed:`);
     }
     try {
       const comp = global.compositor;
       if (comp && typeof comp.get_window_actors === 'function')
         return comp.get_window_actors();
     } catch (e) {
-      logError(`[${ME}] compositor.get_window_actors failed:`, e);
+      console.error(e, `[${ME}] compositor.get_window_actors failed:`);
     }
     return [];
   }
@@ -180,30 +173,26 @@ export default class TriggerMoveWindows extends Extension {
    */
   _syncMainKeybinding() {
     try {
-      log(`[${ME}] Syncing main keybinding...`);
+      console.debug(`[${ME}] Syncing main keybinding...`);
 
-      try {
-        Main.wm.removeKeybinding('trigger-shortcut');
-      } catch (e) {
-        logError(`[${ME}] removeKeybinding(trigger-shortcut) ignored:`, e);
-      }
+      Main.wm.removeKeybinding('trigger-shortcut');
 
       // Check current shortcut setting
       let currentShortcut = this._settings.get_strv('trigger-shortcut');
-      log(`[${ME}] Current shortcut setting: ${JSON.stringify(currentShortcut)}`);
+      console.debug(`[${ME}] Current shortcut setting: ${JSON.stringify(currentShortcut)}`);
 
       const accel =
         currentShortcut && currentShortcut.length > 0 ? currentShortcut[0] : '';
 
       // Ensure a non-empty, structurally valid shortcut (fixes bad values from prefs or manual dconf edits)
       if (!this._isValidTriggerAccelerator(accel)) {
-        log(`[${ME}] Invalid or empty trigger shortcut (${JSON.stringify(accel)}), setting default: <Super><Shift>m`);
+        console.debug(`[${ME}] Invalid or empty trigger shortcut (${JSON.stringify(accel)}), setting default: <Super><Shift>m`);
         const defaultShortcut = ['<Super><Shift>m'];
         this._settings.set_strv('trigger-shortcut', defaultShortcut);
         currentShortcut = defaultShortcut;
-        log(`[${ME}] Default shortcut applied: ${JSON.stringify(currentShortcut)}`);
+        console.debug(`[${ME}] Default shortcut applied: ${JSON.stringify(currentShortcut)}`);
       } else {
-        log(`[${ME}] Using configured shortcut: ${JSON.stringify(currentShortcut)}`);
+        console.debug(`[${ME}] Using configured shortcut: ${JSON.stringify(currentShortcut)}`);
       }
 
       const bindingAction = Main.wm.addKeybinding(
@@ -212,30 +201,30 @@ export default class TriggerMoveWindows extends Extension {
         Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
         this._mainKeybindingActionModes(),
         () => {
-          log(`[${ME}] *** KEYBOARD SHORTCUT PRESSED! ***`);
+          console.debug(`[${ME}] *** KEYBOARD SHORTCUT PRESSED! ***`);
           this._onShortcutTriggered().catch(err => {
-            logError(`[${ME}] Shortcut handler promise rejected:`, err);
+            console.error(err, `[${ME}] Shortcut handler promise rejected:`);
             this._showNotification('Error', `Failed to organize windows: ${err.message}`, 'error');
           });
         }
       );
 
       if (!bindingAction) {
-        logError(`[${ME}] addKeybinding returned NONE — main shortcut is not active (name collision or registration failure)`);
+        console.error(`[${ME}] addKeybinding returned NONE — main shortcut is not active (name collision or registration failure)`);
       } else {
-        log(`[${ME}] Main keybinding action id: ${bindingAction}`);
+        console.debug(`[${ME}] Main keybinding action id: ${bindingAction}`);
       }
 
       const finalShortcut = this._settings.get_strv('trigger-shortcut');
-      log(`[${ME}] Keybinding registered with: ${JSON.stringify(finalShortcut)} — press ${finalShortcut[0]} to organize windows`);
+      console.debug(`[${ME}] Keybinding registered with: ${JSON.stringify(finalShortcut)} — press ${finalShortcut[0]} to organize windows`);
     } catch (error) {
-      logError(`[${ME}] Failed to sync main keybinding:`, error);
+      console.error(error, `[${ME}] Failed to sync main keybinding:`);
       throw error;
     }
   }
 
   async _onShortcutTriggered() {
-    log(`[${ME}] *** SHORTCUT HANDLER CALLED! ***`);
+    console.debug(`[${ME}] *** SHORTCUT HANDLER CALLED! ***`);
 
     try {
       // Show notification for window organization
@@ -247,21 +236,21 @@ export default class TriggerMoveWindows extends Extension {
       // Execute window management logic
       await this._organizeWindows();
 
-      log(`[${ME}] Shortcut handler completed successfully`);
+      console.debug(`[${ME}] Shortcut handler completed successfully`);
 
     } catch (error) {
-      logError(`[${ME}] Error in shortcut handler:`, error);
+      console.error(error, `[${ME}] Error in shortcut handler:`);
       this._showNotification('Error', `Failed to organize windows: ${error.message}`, 'error');
     }
   }
 
   async _organizeWindows() {
-    log(`[${ME}] Starting window organization...`);
+    console.debug(`[${ME}] Starting window organization...`);
 
     try {
       // Get configured applications from settings
       const configuredApps = this._getConfiguredApps();
-      log(`[${ME}] Found ${Object.keys(configuredApps).length} configured applications`);
+      console.debug(`[${ME}] Found ${Object.keys(configuredApps).length} configured applications`);
 
       if (Object.keys(configuredApps).length === 0) {
         this._showNotification('No Configuration', 'No applications configured for workspace assignment', 'window-organization');
@@ -277,7 +266,7 @@ export default class TriggerMoveWindows extends Extension {
         .map(actor => actor.get_meta_window())
         .filter(window => window && window.get_window_type() === Meta.WindowType.NORMAL);
 
-      log(`[${ME}] Found ${windows.length} normal windows`);
+      console.debug(`[${ME}] Found ${windows.length} normal windows`);
 
       let movedCount = 0;
       const processedApps = new Set();
@@ -285,14 +274,14 @@ export default class TriggerMoveWindows extends Extension {
       // Process each window with enhanced GNOME APIs
       for (const metaWindow of windows) {
         const windowInfo = await this._getEnhancedWindowInfo(metaWindow, windowTracker);
-        log(`[${ME}] Processing window: ${windowInfo.title} (App: ${windowInfo.appId}, WM_CLASS: ${windowInfo.wmClass})`);
+        console.debug(`[${ME}] Processing window: ${windowInfo.title} (App: ${windowInfo.appId}, WM_CLASS: ${windowInfo.wmClass})`);
 
         // Find matching app configuration
         const matchingConfig = this._findMatchingAppEnhanced(windowInfo, configuredApps);
 
         if (matchingConfig) {
           const targetWorkspace = matchingConfig.workspace;
-          log(`[${ME}] Found match for ${matchingConfig.appId} -> workspace ${targetWorkspace}`);
+          console.debug(`[${ME}] Found match for ${matchingConfig.appId} -> workspace ${targetWorkspace}`);
 
           // Move window to target workspace
           if (this._moveWindowToWorkspace(metaWindow, targetWorkspace)) {
@@ -300,7 +289,7 @@ export default class TriggerMoveWindows extends Extension {
             processedApps.add(matchingConfig.appId);
           }
         } else {
-          log(`[${ME}] No configuration found for ${windowInfo.appId || windowInfo.wmClass}`);
+          console.debug(`[${ME}] No configuration found for ${windowInfo.appId || windowInfo.wmClass}`);
         }
       }
 
@@ -308,14 +297,14 @@ export default class TriggerMoveWindows extends Extension {
       if (movedCount > 0) {
         const appNames = Array.from(processedApps).join(', ');
         this._showNotification('Organization Complete', `Moved ${movedCount} windows (${appNames}) to configured workspaces`, 'window-organization');
-        log(`[${ME}] Window organization completed: ${movedCount} windows moved for apps: ${appNames}`);
+        console.debug(`[${ME}] Window organization completed: ${movedCount} windows moved for apps: ${appNames}`);
       } else {
         this._showNotification('No Matches Found', 'No open windows matched configured applications', 'window-organization');
-        log(`[${ME}] Window organization completed: no windows moved`);
+        console.debug(`[${ME}] Window organization completed: no windows moved`);
       }
 
     } catch (error) {
-      logError(`[${ME}] Error organizing windows:`, error);
+      console.error(error, `[${ME}] Error organizing windows:`);
       throw error;
     }
   }
@@ -334,7 +323,7 @@ export default class TriggerMoveWindows extends Extension {
 
       return configs;
     } catch (error) {
-      logError(`[${ME}] Error parsing app configs:`, error);
+      console.error(error, `[${ME}] Error parsing app configs:`);
       return {};
     }
   }
@@ -355,10 +344,10 @@ export default class TriggerMoveWindows extends Extension {
       if (app) {
         windowInfo.appId = app.get_id() || '';
         windowInfo.appName = app.get_name() || '';
-        log(`[${ME}] Window tracker found app: ${windowInfo.appId} (${windowInfo.appName})`);
+        console.debug(`[${ME}] Window tracker found app: ${windowInfo.appId} (${windowInfo.appName})`);
       }
     } catch (error) {
-      log(`[${ME}] Could not get app info from WindowTracker: ${error.message}`);
+      console.debug(`[${ME}] Could not get app info from WindowTracker: ${error.message}`);
     }
 
     // Get process name as fallback (async: avoid blocking the Shell main loop)
@@ -367,7 +356,7 @@ export default class TriggerMoveWindows extends Extension {
       if (pid > 0)
         windowInfo.process = await this._getProcessNameAsync(pid);
     } catch (error) {
-      log(`[${ME}] Could not get process info: ${error.message}`);
+      console.debug(`[${ME}] Could not get process info: ${error.message}`);
     }
 
     return windowInfo;
@@ -386,7 +375,7 @@ export default class TriggerMoveWindows extends Extension {
       if (pid > 0)
         windowInfo.process = await this._getProcessNameAsync(pid);
     } catch (error) {
-      log(`[${ME}] Could not get process info: ${error.message}`);
+      console.debug(`[${ME}] Could not get process info: ${error.message}`);
     }
 
     return windowInfo;
@@ -421,7 +410,7 @@ export default class TriggerMoveWindows extends Extension {
           else
             resolve(String(bytes).trim());
         } catch (error) {
-          log(`[${ME}] Error reading process name for PID ${pid}: ${error.message}`);
+          console.debug(`[${ME}] Error reading process name for PID ${pid}: ${error.message}`);
           resolve('');
         }
       });
@@ -454,13 +443,13 @@ export default class TriggerMoveWindows extends Extension {
 
         // Try exact match first
         if (matchValue === appIdLower) {
-          log(`[${ME}] Exact match: ${appId} with ${strategy.type} '${strategy.value}'`);
+          console.debug(`[${ME}] Exact match: ${appId} with ${strategy.type} '${strategy.value}'`);
           return { appId, workspace };
         }
 
         // Try contains match
         if (matchValue.includes(appIdLower) || appIdLower.includes(matchValue)) {
-          log(`[${ME}] Partial match: ${appId} with ${strategy.type} '${strategy.value}'`);
+          console.debug(`[${ME}] Partial match: ${appId} with ${strategy.type} '${strategy.value}'`);
           return { appId, workspace };
         }
       }
@@ -470,30 +459,30 @@ export default class TriggerMoveWindows extends Extension {
   }
 
   _debugGnomeAPIs() {
-    log(`[${ME}] === GNOME Shell API Debug Info ===`);
+    console.debug(`[${ME}] === GNOME Shell API Debug Info ===`);
 
     try {
       // Show WindowTracker info
       const windowTracker = Shell.WindowTracker.get_default();
-      log(`[${ME}] WindowTracker available: ${!!windowTracker}`);
+      console.debug(`[${ME}] WindowTracker available: ${!!windowTracker}`);
 
       // Show AppSystem info
       const appSystem = Shell.AppSystem.get_default();
-      log(`[${ME}] AppSystem available: ${!!appSystem}`);
+      console.debug(`[${ME}] AppSystem available: ${!!appSystem}`);
 
       // List all running applications
       const runningApps = appSystem.get_running();
-      log(`[${ME}] Found ${runningApps.length} running applications:`);
+      console.debug(`[${ME}] Found ${runningApps.length} running applications:`);
 
       runningApps.forEach(app => {
         const appId = app.get_id();
         const appName = app.get_name();
         const windows = app.get_windows();
-        log(`[${ME}]   - ${appId} (${appName}) - ${windows.length} windows`);
+        console.debug(`[${ME}]   - ${appId} (${appName}) - ${windows.length} windows`);
       });
 
       // List all windows with their app associations
-      log(`[${ME}] Window to App associations:`);
+      console.debug(`[${ME}] Window to App associations:`);
       const windows = this._getWindowActors()
         .map(actor => actor.get_meta_window())
         .filter(window => window && window.get_window_type() === Meta.WindowType.NORMAL);
@@ -505,14 +494,14 @@ export default class TriggerMoveWindows extends Extension {
         const appId = app ? app.get_id() : 'No App';
         const appName = app ? app.get_name() : 'No App Name';
 
-        log(`[${ME}]   Window: "${title}" | WM_CLASS: ${wmClass} | App: ${appId} (${appName})`);
+        console.debug(`[${ME}]   Window: "${title}" | WM_CLASS: ${wmClass} | App: ${appId} (${appName})`);
       });
 
     } catch (error) {
-      logError(`[${ME}] Error in GNOME API debug:`, error);
+      console.error(error, `[${ME}] Error in GNOME API debug:`);
     }
 
-    log(`[${ME}] === End GNOME Shell API Debug ===`);
+    console.debug(`[${ME}] === End GNOME Shell API Debug ===`);
   }
 
   _findMatchingApp(windowInfo, configuredApps) {
@@ -535,7 +524,7 @@ export default class TriggerMoveWindows extends Extension {
           matchValue.includes(appIdLower) ||
           appIdLower.includes(matchValue)
         )) {
-          log(`[${ME}] Matched ${appId} with ${matchValue}`);
+          console.debug(`[${ME}] Matched ${appId} with ${matchValue}`);
           return { appId, workspace };
         }
       }
@@ -550,7 +539,7 @@ export default class TriggerMoveWindows extends Extension {
       const currentIndex = currentWorkspace ? currentWorkspace.index() : 0;
 
       if (currentIndex === targetWorkspaceIndex - 1) {
-        log(`[${ME}] Window already on target workspace ${targetWorkspaceIndex}`);
+        console.debug(`[${ME}] Window already on target workspace ${targetWorkspaceIndex}`);
         return false;
       }
 
@@ -560,32 +549,32 @@ export default class TriggerMoveWindows extends Extension {
       // Ensure target workspace exists
       while (workspaceManager.get_n_workspaces() < targetWorkspaceIndex) {
         workspaceManager.append_new_workspace(false, global.get_current_time());
-        log(`[${ME}] Created new workspace ${workspaceManager.get_n_workspaces()}`);
+        console.debug(`[${ME}] Created new workspace ${workspaceManager.get_n_workspaces()}`);
       }
 
       // Get target workspace (convert from 1-based to 0-based)
       const targetWorkspace = workspaceManager.get_workspace_by_index(targetWorkspaceIndex - 1);
 
       if (!targetWorkspace) {
-        log(`[${ME}] Could not find workspace ${targetWorkspaceIndex}`);
+        console.debug(`[${ME}] Could not find workspace ${targetWorkspaceIndex}`);
         return false;
       }
 
       // Move window
       metaWindow.change_workspace(targetWorkspace);
-      log(`[${ME}] Moved window '${metaWindow.get_title()}' to workspace ${targetWorkspaceIndex}`);
+      console.debug(`[${ME}] Moved window '${metaWindow.get_title()}' to workspace ${targetWorkspaceIndex}`);
 
       return true;
 
     } catch (error) {
-      logError(`[${ME}] Error moving window to workspace ${targetWorkspaceIndex}:`, error);
+      console.error(error, `[${ME}] Error moving window to workspace ${targetWorkspaceIndex}:`);
       return false;
     }
   }
 
   _registerAppShortcuts() {
     try {
-      log(`[${ME}] Registering app-specific shortcuts (Dynamic Logic)...`);
+      console.debug(`[${ME}] Registering app-specific shortcuts (Dynamic Logic)...`);
       const configuredApps = this._getConfiguredApps();
       let shortcutCount = 0;
       
@@ -605,7 +594,7 @@ export default class TriggerMoveWindows extends Extension {
           // Check if we have a matching schema key
           if (!availableKeys.includes(schemaKey)) {
             // Fallback to pool if specific key missing
-            log(`[${ME}] Schema key ${schemaKey} missing, searching for available pool key...`);
+            console.debug(`[${ME}] Schema key ${schemaKey} missing, searching for available pool key...`);
             
             // Look for first available custom-n key not in use
             for (let i = 1; i <= 10; i++) {
@@ -618,12 +607,12 @@ export default class TriggerMoveWindows extends Extension {
           }
 
           if (!availableKeys.includes(schemaKey)) {
-            log(`[${ME}] Could not find ANY valid schema key for ${appId}`);
+            console.debug(`[${ME}] Could not find ANY valid schema key for ${appId}`);
             return;
           }
 
           try {
-            log(`[${ME}] Attempting to bind ${shortcut} to ${appId} using ${schemaKey}`);
+            console.debug(`[${ME}] Attempting to bind ${shortcut} to ${appId} using ${schemaKey}`);
             
             // Update the setting value first
             this._settings.set_strv(schemaKey, [shortcut]);
@@ -635,54 +624,50 @@ export default class TriggerMoveWindows extends Extension {
               Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
               this._appKeybindingActionModes(),
               () => {
-                log(`[${ME}] *** APP SHORTCUT TRIGGERED: ${appId} ***`);
+                console.debug(`[${ME}] *** APP SHORTCUT TRIGGERED: ${appId} ***`);
                 this._activateApp(appId).catch(err => {
-                  logError(`[${ME}] App shortcut handler rejected:`, err);
+                  console.error(err, `[${ME}] App shortcut handler rejected:`);
                 });
               }
             );
 
             this._appShortcuts.set(appId, schemaKey);
             shortcutCount++;
-            log(`[${ME}] SUCCESSFULLY registered ${appId} on ${schemaKey}`);
+            console.debug(`[${ME}] SUCCESSFULLY registered ${appId} on ${schemaKey}`);
 
           } catch (error) {
-            logError(`[${ME}] FAILED to register ${appId}:`, error);
+            console.error(error, `[${ME}] FAILED to register ${appId}:`);
           }
         }
       });
 
-      log(`[${ME}] Finished: ${shortcutCount} shortcuts registered`);
+      console.debug(`[${ME}] Finished: ${shortcutCount} shortcuts registered`);
     } catch (error) {
-      logError(`[${ME}] Error in _registerAppShortcuts:`, error);
+      console.error(error, `[${ME}] Error in _registerAppShortcuts:`);
     }
   }
 
   _removeAppShortcuts() {
     try {
-      log(`[${ME}] Removing app shortcuts...`);
+      console.debug(`[${ME}] Removing app shortcuts...`);
       let removedCount = 0;
 
       this._appShortcuts.forEach((shortcutId, appId) => {
-        try {
-          Main.wm.removeKeybinding(shortcutId);
-          removedCount++;
-          log(`[${ME}] Removed shortcut for app: ${appId}`);
-        } catch (error) {
-          logError(`[${ME}] Error removing shortcut for ${appId}:`, error);
-        }
+        Main.wm.removeKeybinding(shortcutId);
+        removedCount++;
+        console.debug(`[${ME}] Removed shortcut for app: ${appId}`);
       });
 
       this._appShortcuts.clear();
-      log(`[${ME}] Removed ${removedCount} app shortcuts`);
+      console.debug(`[${ME}] Removed ${removedCount} app shortcuts`);
     } catch (error) {
-      logError(`[${ME}] Error removing app shortcuts:`, error);
+      console.error(error, `[${ME}] Error removing app shortcuts:`);
     }
   }
 
   async _activateApp(appId) {
     try {
-      log(`[${ME}] Activating app: ${appId}`);
+      console.debug(`[${ME}] Activating app: ${appId}`);
 
       // Get app configuration
       const configuredApps = this._getConfiguredApps();
@@ -713,14 +698,14 @@ export default class TriggerMoveWindows extends Extension {
 
         this._focusWindow(targetWindow);
         this._showNotification('Window Activated', `Focused ${displayName}`, 'window-focus');
-        log(`[${ME}] Focused window for ${appId}: ${targetWindow.get_title()}`);
+        console.debug(`[${ME}] Focused window for ${appId}: ${targetWindow.get_title()}`);
       } else {
         // Try to launch the application
         this._launchApp(appId, displayName);
       }
 
     } catch (error) {
-      logError(`[${ME}] Error activating app ${appId}:`, error);
+      console.error(error, `[${ME}] Error activating app ${appId}:`);
       this._showNotification('Activation Error', `Failed to activate ${appId}`, 'error');
     }
   }
@@ -732,23 +717,23 @@ export default class TriggerMoveWindows extends Extension {
 
       // Check exact matches against verified properties
       if (verified.wmClass && windowInfo.wmClass === verified.wmClass) {
-        log(`[${ME}] Verified match by WM_CLASS: ${verified.wmClass}`);
+        console.debug(`[${ME}] Verified match by WM_CLASS: ${verified.wmClass}`);
         return true;
       }
       if (verified.appId && windowInfo.appId === verified.appId) {
-        log(`[${ME}] Verified match by App ID: ${verified.appId}`);
+        console.debug(`[${ME}] Verified match by App ID: ${verified.appId}`);
         return true;
       }
       if (verified.process && windowInfo.process === verified.process) {
-        log(`[${ME}] Verified match by Process: ${verified.process}`);
+        console.debug(`[${ME}] Verified match by Process: ${verified.process}`);
         return true;
       }
       if (verified.appName && windowInfo.appName === verified.appName) {
-        log(`[${ME}] Verified match by App Name: ${verified.appName}`);
+        console.debug(`[${ME}] Verified match by App Name: ${verified.appName}`);
         return true;
       }
 
-      log(`[${ME}] No verified match found, using fallback matching for ${appId}`);
+      console.debug(`[${ME}] No verified match found, using fallback matching for ${appId}`);
     }
 
     // Fallback to fuzzy matching for apps without verified data
@@ -823,12 +808,12 @@ export default class TriggerMoveWindows extends Extension {
       const app = windowTracker.get_window_app(metaWindow);
       const appName = app ? app.get_name() : metaWindow.get_title();
 
-      log(`[${ME}] Focusing window: ${metaWindow.get_title()} for app: ${appName}`);
+      console.debug(`[${ME}] Focusing window: ${metaWindow.get_title()} for app: ${appName}`);
 
       // Switch to the window's workspace
       const workspace = metaWindow.get_workspace();
       if (workspace) {
-        log(`[${ME}] Switching to workspace ${workspace.index() + 1}`);
+        console.debug(`[${ME}] Switching to workspace ${workspace.index() + 1}`);
         workspace.activate(display.get_current_time());
       }
 
@@ -840,10 +825,10 @@ export default class TriggerMoveWindows extends Extension {
       // Ensure it's on the current monitor if multi-monitor
       // metaWindow.move_to_monitor(display.get_current_monitor());
 
-      log(`[${ME}] Window activated successfully`);
+      console.debug(`[${ME}] Window activated successfully`);
 
     } catch (error) {
-      logError(`[${ME}] Error focusing window:`, error);
+      console.error(error, `[${ME}] Error focusing window:`);
     }
   }
 
@@ -863,7 +848,7 @@ export default class TriggerMoveWindows extends Extension {
 
   _launchApp(appId, displayName) {
     try {
-      log(`[${ME}] Attempting to launch app: ${appId} (DisplayName: ${displayName})`);
+      console.debug(`[${ME}] Attempting to launch app: ${appId} (DisplayName: ${displayName})`);
 
       // Try to find the app in the app system
       const appSystem = Shell.AppSystem.get_default();
@@ -872,7 +857,7 @@ export default class TriggerMoveWindows extends Extension {
 
       // If exact ID lookup fails, search for an app with a matching name or command
       if (!app) {
-        log(`[${ME}] Exact app ID lookup failed for '${appId}', searching installed apps...`);
+        console.debug(`[${ME}] Exact app ID lookup failed for '${appId}', searching installed apps...`);
         const installedApps = appSystem.get_installed();
         
         const appIdLower = appId.toLowerCase();
@@ -892,7 +877,7 @@ export default class TriggerMoveWindows extends Extension {
               (nameLower.length >= 3 && installedName.includes(nameLower)) ||
               (appIdLower.length >= 3 && installedName.includes(appIdLower))) {
             
-            log(`[${ME}] Found potential match in installed apps: ${installedApp.get_id()} (${installedApp.get_name()})`);
+            console.debug(`[${ME}] Found potential match in installed apps: ${installedApp.get_id()} (${installedApp.get_name()})`);
             app = installedApp;
             break;
           }
@@ -900,12 +885,12 @@ export default class TriggerMoveWindows extends Extension {
       }
 
       if (app) {
-        log(`[${ME}] Launching app: ${app.get_id()} (${app.get_name()})`);
+        console.debug(`[${ME}] Launching app: ${app.get_id()} (${app.get_name()})`);
         this._launchAppPreferred(app);
         this._showNotification('Application Launched', `Started ${app.get_name() || displayName}`, 'app-launch');
       } else {
         // Try launching via command line as absolute fallback
-        log(`[${ME}] Still no app found in system, trying command-line fallback for: ${appId}`);
+        console.debug(`[${ME}] Still no app found in system, trying command-line fallback for: ${appId}`);
         const subprocess = new Gio.Subprocess({
           argv: [appId],
           flags: Gio.SubprocessFlags.NONE
@@ -916,7 +901,7 @@ export default class TriggerMoveWindows extends Extension {
       }
 
     } catch (error) {
-      logError(`[${ME}] Error launching app ${appId}:`, error);
+      console.error(error, `[${ME}] Error launching app ${appId}:`);
       this._showNotification('Launch Failed', `Could not start ${displayName}: ${error.message}`, 'error');
     }
   }

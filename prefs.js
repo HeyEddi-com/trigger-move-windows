@@ -52,7 +52,7 @@ class ShortcutRecorder {
   }
 
   _onKeyPressed(keyval, state) {
-    log(`[TriggerMoveWindows] Key pressed: val=${keyval}, state=${state}`);
+    console.debug(`[TriggerMoveWindows] Key pressed: val=${keyval}, state=${state}`);
     if (this._state !== 'RECORDING') {
       return false;
     }
@@ -134,7 +134,7 @@ class ShortcutRecorder {
       this._statusCallback(_('Press any key to set shortcut. BackSpace to clear, Esc to cancel.'));
     }
     
-    log(`[TriggerMoveWindows] Started recording shortcut for ${this._appId}`);
+    console.debug(`[TriggerMoveWindows] Started recording shortcut for ${this._appId}`);
   }
 
   stop(save = true) {
@@ -148,11 +148,11 @@ class ShortcutRecorder {
     }
 
     if (save) {
-      log(`[TriggerMoveWindows] Saving shortcut for ${this._appId}: "${this._newShortcut}"`);
+      console.debug(`[TriggerMoveWindows] Saving shortcut for ${this._appId}: "${this._newShortcut}"`);
       this._updateShortcutFunc(this._settings, this._appId, this._newShortcut);
       this._button.label = this._formatLabelFunc([this._newShortcut]);
     } else {
-      log(`[TriggerMoveWindows] Cancelled recording for ${this._appId}`);
+      console.debug(`[TriggerMoveWindows] Cancelled recording for ${this._appId}`);
       this._button.label = this._originalLabel;
     }
   }
@@ -561,7 +561,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
 
   _showAddAppDialog(parent, settings, addCallback) {
-    log('[TriggerMoveWindows] Opening application browser dialog...');
+    console.debug('[TriggerMoveWindows] Opening application browser dialog...');
     this._showApplicationBrowser(parent, settings, () => {
       // Refresh logic if needed, but addCallback is called inside _showApplicationBrowser
     });
@@ -634,9 +634,9 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     content.append(scrolledWindow);
 
     // Load and populate applications
-    log('[TriggerMoveWindows] Scanning installed applications...');
+    console.debug('[TriggerMoveWindows] Scanning installed applications...');
     const installedApps = this._scanInstalledApplications();
-    log(`[TriggerMoveWindows] Found ${installedApps.length} applications`);
+    console.debug(`[TriggerMoveWindows] Found ${installedApps.length} applications`);
     let selectedApp = null;
 
     const populateList = (filter = '') => {
@@ -720,7 +720,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       });
       
       const duration = Date.now() - startTime;
-      log(`[TriggerMoveWindows] Populated list with ${filteredApps.length} apps in ${duration}ms`);
+      console.debug(`[TriggerMoveWindows] Populated list with ${filteredApps.length} apps in ${duration}ms`);
     };
 
     // Initial population
@@ -764,7 +764,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     
     // Use Gio.AppInfo to get all installed applications - much more robust
     const appInfos = Gio.AppInfo.get_all();
-    log(`[TriggerMoveWindows] Gio found ${appInfos.length} total applications`);
+    console.debug(`[TriggerMoveWindows] Gio found ${appInfos.length} total applications`);
 
     appInfos.forEach(appInfo => {
       try {
@@ -797,7 +797,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
           appsById.set(app.app_id, app);
         }
       } catch (error) {
-        logError(error, `[TriggerMoveWindows] Error processing app info`);
+        console.error(`[TriggerMoveWindows] Error processing app info`, error);
       }
     });
 
@@ -812,7 +812,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     }
 
     const result = Array.from(appsByName.values());
-    log(`[TriggerMoveWindows] Found ${result.length} unique applications after Gio scan`);
+    console.debug(`[TriggerMoveWindows] Found ${result.length} unique applications after Gio scan`);
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -856,7 +856,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       icon: app.icon
     };
     
-    log(`[TriggerMoveWindows] Adding selected app ${app.app_id}: ${JSON.stringify(appConfig)}`);
+    console.debug(`[TriggerMoveWindows] Adding selected app ${app.app_id}: ${JSON.stringify(appConfig)}`);
     this._updateAppConfig(settings, app.app_id, appConfig);
     
     // Call the parent callback to refresh the UI
@@ -868,7 +868,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   _detectRunningWindows() {
     // Window detection not available in preferences context
     // Meta and Shell APIs are only available in main extension process
-    log(`[TriggerMoveWindows] Window detection not available in preferences context`);
+    console.debug(`[TriggerMoveWindows] Window detection not available in preferences context`);
     return [];
   }
 
@@ -927,7 +927,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _showSimpleAddDialog(parent, settings, addCallback) {
-    log('[TriggerMoveWindows] Creating simple add dialog...');
+    console.debug('[TriggerMoveWindows] Creating simple add dialog...');
 
     const dialog = new Adw.MessageDialog({
       heading: _('Add Application'),
@@ -1067,13 +1067,13 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
     dialog.set_response_appearance('add', Adw.ResponseAppearance.SUGGESTED);
 
     dialog.connect('response', (dialog, response) => {
-      log(`[TriggerMoveWindows] Dialog response: ${response}`);
+      console.debug(`[TriggerMoveWindows] Dialog response: ${response}`);
       if (response === 'add') {
         const appId = appIdEntry.get_text().trim();
         const name = nameEntry.get_text().trim();
         const workspace = workspaceSpinButton.get_value_as_int();
 
-        log(`[TriggerMoveWindows] Adding app: ID=${appId}, Name=${name}, Workspace=${workspace}`);
+        console.debug(`[TriggerMoveWindows] Adding app: ID=${appId}, Name=${name}, Workspace=${workspace}`);
 
         if (appId) {
           try {
@@ -1094,17 +1094,17 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
                 title: detectedAppData.title,
                 detectedAt: new Date().toISOString()
               };
-              log(`[TriggerMoveWindows] Including verified data: ${JSON.stringify(appConfig.verified)}`);
+              console.debug(`[TriggerMoveWindows] Including verified data: ${JSON.stringify(appConfig.verified)}`);
             }
 
-            log(`[TriggerMoveWindows] Calling _updateAppConfig with: ${JSON.stringify(appConfig)}`);
+            console.debug(`[TriggerMoveWindows] Calling _updateAppConfig with: ${JSON.stringify(appConfig)}`);
             this._updateAppConfig(settings, appId, appConfig);
             addCallback(appId, workspace);
           } catch (error) {
-            logError(error, '[TriggerMoveWindows] Error adding app');
+            console.error('[TriggerMoveWindows] Error adding app', error);
           }
         } else {
-          log('[TriggerMoveWindows] No app ID entered');
+          console.debug('[TriggerMoveWindows] No app ID entered');
         }
       }
       dialog.destroy();
@@ -1214,11 +1214,11 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _updateAppConfig(settings, appName, appConfig) {
-    log(`[TriggerMoveWindows] _updateAppConfig called with: ${appName}, config: ${JSON.stringify(appConfig)}`);
+    console.debug(`[TriggerMoveWindows] _updateAppConfig called with: ${appName}, config: ${JSON.stringify(appConfig)}`);
 
     try {
       const configs = this._parseAppConfigs(settings);
-      log(`[TriggerMoveWindows] Current configs: ${JSON.stringify(configs)}`);
+      console.debug(`[TriggerMoveWindows] Current configs: ${JSON.stringify(configs)}`);
 
       // If appConfig is just a number (workspace), convert to object for backward compatibility
       if (typeof appConfig === 'number') {
@@ -1228,13 +1228,13 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       }
 
       const jsonString = JSON.stringify(configs);
-      log(`[TriggerMoveWindows] Setting app-configs to: ${jsonString}`);
+      console.debug(`[TriggerMoveWindows] Setting app-configs to: ${jsonString}`);
 
       settings.set_string('app-configs', jsonString);
 
-      log('[TriggerMoveWindows] App configuration saved successfully');
+      console.debug('[TriggerMoveWindows] App configuration saved successfully');
     } catch (error) {
-      logError(error, '[TriggerMoveWindows] Error in _updateAppConfig');
+      console.error('[TriggerMoveWindows] Error in _updateAppConfig', error);
     }
   }
 
@@ -1275,7 +1275,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       this._getShortcutLabel.bind(this),
       (settings, id, shortcut) => {
         settings.set_strv('trigger-shortcut', [shortcut]);
-        log(`[TriggerMoveWindows] Global shortcut updated to: ${shortcut}`);
+        console.debug(`[TriggerMoveWindows] Global shortcut updated to: ${shortcut}`);
       },
       this._checkShortcutConflicts.bind(this),
       (msg) => {
@@ -1296,7 +1296,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _updateAppShortcut(settings, appId, shortcut) {
-    log(`[TriggerMoveWindows] Shortcut for ${appId}: ${shortcut}`);
+    console.debug(`[TriggerMoveWindows] Shortcut for ${appId}: ${shortcut}`);
     const configs = this._parseAppConfigs(settings);
     const currentConfig = configs[appId] || { name: appId, workspace: 1 };
     currentConfig.shortcut = shortcut;
@@ -1305,7 +1305,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
   }
 
   _updateAppDisplayName(settings, appId, newName) {
-    log(`[TriggerMoveWindows] Updating display name for ${appId} to: ${newName}`);
+    console.debug(`[TriggerMoveWindows] Updating display name for ${appId} to: ${newName}`);
     const configs = this._parseAppConfigs(settings);
     const currentConfig = configs[appId] || { workspace: 1, shortcut: '' };
     currentConfig.name = newName;
