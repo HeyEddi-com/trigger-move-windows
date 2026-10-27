@@ -59,7 +59,7 @@ export default class TriggerMoveWindows extends Extension {
       console.debug(`[${ME}] Extension enabled successfully`);
 
     } catch (error) {
-      console.error(error, `[${ME}] Error during enable:`);
+      console.debug(error, `[${ME}] Error during enable:`);
       this._showNotification('Extension Error', `Failed to enable: ${error.message}`, 'error');
     }
   }
@@ -154,14 +154,14 @@ export default class TriggerMoveWindows extends Extension {
       if (typeof global.get_window_actors === 'function')
         return global.get_window_actors();
     } catch (e) {
-      console.error(e, `[${ME}] global.get_window_actors failed:`);
+      console.debug(e, `[${ME}] global.get_window_actors failed:`);
     }
     try {
       const comp = global.compositor;
       if (comp && typeof comp.get_window_actors === 'function')
         return comp.get_window_actors();
     } catch (e) {
-      console.error(e, `[${ME}] compositor.get_window_actors failed:`);
+      console.debug(e, `[${ME}] compositor.get_window_actors failed:`);
     }
     return [];
   }
@@ -203,14 +203,14 @@ export default class TriggerMoveWindows extends Extension {
         () => {
           console.debug(`[${ME}] *** KEYBOARD SHORTCUT PRESSED! ***`);
           this._onShortcutTriggered().catch(err => {
-            console.error(err, `[${ME}] Shortcut handler promise rejected:`);
+            console.debug(err, `[${ME}] Shortcut handler promise rejected:`);
             this._showNotification('Error', `Failed to organize windows: ${err.message}`, 'error');
           });
         }
       );
 
       if (!bindingAction) {
-        console.error(`[${ME}] addKeybinding returned NONE — main shortcut is not active (name collision or registration failure)`);
+        console.debug(`[${ME}] addKeybinding returned NONE — main shortcut is not active (name collision or registration failure)`);
       } else {
         console.debug(`[${ME}] Main keybinding action id: ${bindingAction}`);
       }
@@ -218,7 +218,7 @@ export default class TriggerMoveWindows extends Extension {
       const finalShortcut = this._settings.get_strv('trigger-shortcut');
       console.debug(`[${ME}] Keybinding registered with: ${JSON.stringify(finalShortcut)} — press ${finalShortcut[0]} to organize windows`);
     } catch (error) {
-      console.error(error, `[${ME}] Failed to sync main keybinding:`);
+      console.debug(error, `[${ME}] Failed to sync main keybinding:`);
       throw error;
     }
   }
@@ -239,7 +239,7 @@ export default class TriggerMoveWindows extends Extension {
       console.debug(`[${ME}] Shortcut handler completed successfully`);
 
     } catch (error) {
-      console.error(error, `[${ME}] Error in shortcut handler:`);
+      console.debug(error, `[${ME}] Error in shortcut handler:`);
       this._showNotification('Error', `Failed to organize windows: ${error.message}`, 'error');
     }
   }
@@ -304,7 +304,7 @@ export default class TriggerMoveWindows extends Extension {
       }
 
     } catch (error) {
-      console.error(error, `[${ME}] Error organizing windows:`);
+      console.debug(error, `[${ME}] Error organizing windows:`);
       throw error;
     }
   }
@@ -323,7 +323,7 @@ export default class TriggerMoveWindows extends Extension {
 
       return configs;
     } catch (error) {
-      console.error(error, `[${ME}] Error parsing app configs:`);
+      console.debug(error, `[${ME}] Error parsing app configs:`);
       return {};
     }
   }
@@ -498,7 +498,7 @@ export default class TriggerMoveWindows extends Extension {
       });
 
     } catch (error) {
-      console.error(error, `[${ME}] Error in GNOME API debug:`);
+      console.debug(error, `[${ME}] Error in GNOME API debug:`);
     }
 
     console.debug(`[${ME}] === End GNOME Shell API Debug ===`);
@@ -567,7 +567,7 @@ export default class TriggerMoveWindows extends Extension {
       return true;
 
     } catch (error) {
-      console.error(error, `[${ME}] Error moving window to workspace ${targetWorkspaceIndex}:`);
+      console.debug(error, `[${ME}] Error moving window to workspace ${targetWorkspaceIndex}:`);
       return false;
     }
   }
@@ -626,7 +626,7 @@ export default class TriggerMoveWindows extends Extension {
               () => {
                 console.debug(`[${ME}] *** APP SHORTCUT TRIGGERED: ${appId} ***`);
                 this._activateApp(appId).catch(err => {
-                  console.error(err, `[${ME}] App shortcut handler rejected:`);
+                  console.debug(err, `[${ME}] App shortcut handler rejected:`);
                 });
               }
             );
@@ -636,14 +636,14 @@ export default class TriggerMoveWindows extends Extension {
             console.debug(`[${ME}] SUCCESSFULLY registered ${appId} on ${schemaKey}`);
 
           } catch (error) {
-            console.error(error, `[${ME}] FAILED to register ${appId}:`);
+            console.debug(error, `[${ME}] FAILED to register ${appId}:`);
           }
         }
       });
 
       console.debug(`[${ME}] Finished: ${shortcutCount} shortcuts registered`);
     } catch (error) {
-      console.error(error, `[${ME}] Error in _registerAppShortcuts:`);
+      console.debug(error, `[${ME}] Error in _registerAppShortcuts:`);
     }
   }
 
@@ -661,7 +661,7 @@ export default class TriggerMoveWindows extends Extension {
       this._appShortcuts.clear();
       console.debug(`[${ME}] Removed ${removedCount} app shortcuts`);
     } catch (error) {
-      console.error(error, `[${ME}] Error removing app shortcuts:`);
+      console.debug(error, `[${ME}] Error removing app shortcuts:`);
     }
   }
 
@@ -705,7 +705,7 @@ export default class TriggerMoveWindows extends Extension {
       }
 
     } catch (error) {
-      console.error(error, `[${ME}] Error activating app ${appId}:`);
+      console.debug(error, `[${ME}] Error activating app ${appId}:`);
       this._showNotification('Activation Error', `Failed to activate ${appId}`, 'error');
     }
   }
@@ -828,7 +828,7 @@ export default class TriggerMoveWindows extends Extension {
       console.debug(`[${ME}] Window activated successfully`);
 
     } catch (error) {
-      console.error(error, `[${ME}] Error focusing window:`);
+      console.debug(error, `[${ME}] Error focusing window:`);
     }
   }
 
@@ -901,7 +901,7 @@ export default class TriggerMoveWindows extends Extension {
       }
 
     } catch (error) {
-      console.error(error, `[${ME}] Error launching app ${appId}:`);
+      console.debug(error, `[${ME}] Error launching app ${appId}:`);
       this._showNotification('Launch Failed', `Could not start ${displayName}: ${error.message}`, 'error');
     }
   }

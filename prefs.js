@@ -797,7 +797,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
           appsById.set(app.app_id, app);
         }
       } catch (error) {
-        console.error(`[TriggerMoveWindows] Error processing app info`, error);
+        console.debug(`[TriggerMoveWindows] Error processing app info`, error);
       }
     });
 
@@ -1101,7 +1101,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
             this._updateAppConfig(settings, appId, appConfig);
             addCallback(appId, workspace);
           } catch (error) {
-            console.error('[TriggerMoveWindows] Error adding app', error);
+            console.debug('[TriggerMoveWindows] Error adding app', error);
           }
         } else {
           console.debug('[TriggerMoveWindows] No app ID entered');
@@ -1208,7 +1208,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
       });
       return configs;
     } catch (error) {
-      console.error('Error parsing app configs:', error);
+      console.debug('Error parsing app configs:', error);
       return {};
     }
   }
@@ -1234,7 +1234,7 @@ export default class TriggerMoveWindowsPreferences extends ExtensionPreferences 
 
       console.debug('[TriggerMoveWindows] App configuration saved successfully');
     } catch (error) {
-      console.error('[TriggerMoveWindows] Error in _updateAppConfig', error);
+      console.debug('[TriggerMoveWindows] Error in _updateAppConfig', error);
     }
   }
 
